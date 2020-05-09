@@ -25,6 +25,7 @@
 #include "android_drv.h"
 #endif
 #include "linux_ioctl.h"
+#include <stdbool.h>
 
 #define WPA_PS_ENABLED        0
 #define WPA_PS_DISABLED        1
@@ -91,7 +92,7 @@ static char *getop(char *s, int *first_time)
     char *p;
     if (*first_time){
         p = strtok(s, delim);
-        *first_time = FALSE;
+        *first_time = false;
     }
     else{
         p = strtok(NULL, delim);
@@ -109,7 +110,7 @@ static int wpa_driver_set_backgroundscan_params(void *priv, char *cmd)
     int ret = 0, i = 0, bp;
     char buf[NL80211_BGCAN_BUF_LEN];
     struct wpa_ssid *ssid_conf;
-    int first_time = TRUE;
+    int first_time = true;
     char    *opstr = NULL;
     char      *ptr = NULL;
     int find_ssid = 0;
