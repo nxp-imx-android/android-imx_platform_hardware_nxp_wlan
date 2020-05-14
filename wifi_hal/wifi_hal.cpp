@@ -1,4 +1,4 @@
-/* 
+/*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
  * Portions copyright 2020 NXP
@@ -73,7 +73,7 @@ wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_handle i
 /**
 * API to set packe filter
 * @param program        pointer to the program byte-code
-* @param len               length of the program byte_code 
+* @param len               length of the program byte_code
 */
 wifi_error wifi_set_packet_filter(wifi_interface_handle iface, const u8* program, u32 len);
 wifi_error wifi_start_wake_reason_cnt(hal_info * info);
@@ -84,9 +84,9 @@ wifi_error wifi_start_wake_reason_cnt(hal_info * info);
 * @param max_len       pointer to maximum size of the filter bytecode, filled in upon return
 */
 wifi_error wifi_get_packet_filter_capabilities(wifi_interface_handle handle, u32* version, u32* max_len);
-wifi_error wifi_get_wake_reason_stats(wifi_interface_handle iface, 
+wifi_error wifi_get_wake_reason_stats(wifi_interface_handle iface,
                                             WLAN_DRIVER_WAKE_REASON_CNT *wifi_wake_reason_cnt);
-wifi_error wifi_get_valid_channels(wifi_interface_handle handle, int band, int max_channels, 
+wifi_error wifi_get_valid_channels(wifi_interface_handle handle, int band, int max_channels,
                                         wifi_channel *channels, int *num_channels);
 
 typedef enum wifi_attr {
@@ -132,7 +132,7 @@ enum wifi_attr_nd_offload
     NXP_WIFI_ATTR_ND_OFFLOAD_AFTER_LAST - 1,
 };
 
-enum wifi_attr_packet_filter 
+enum wifi_attr_packet_filter
 {
     NXP_ATTR_PACKET_FILTER_INVALID = 0,
     NXP_ATTR_PACKET_FILTER_TOTAL_LENGTH,
@@ -188,7 +188,7 @@ static nl_sock * wifi_create_nl_socket(int port)
         nl_socket_free(sock);
         return NULL;
     }
-    
+
     return sock;
 }
 
@@ -442,24 +442,17 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
 
     int bad_commands = 0;
 
-    for (int i = 0; i < info->num_event_cb; i++) {
-        cb_info *cbi = &(info->event_cb[i]);
-        WifiCommand *cmd = (WifiCommand *)cbi->cb_arg;
-        ALOGE("Command left in event_cb %p:%s", cmd, cmd->getType());
-    }
     while (info->num_cmd > bad_commands) {
         int num_cmd = info->num_cmd;
         cmd_info *cmdi = &(info->cmd[bad_commands]);
         WifiCommand *cmd = cmdi->cmd;
         if (cmd != NULL) {
-            ALOGV("Cancelling command %p:%s", cmd, cmd->getType());
             pthread_mutex_unlock(&info->cb_lock);
             cmd->cancel();
             pthread_mutex_lock(&info->cb_lock);
             /* release reference added when command is saved */
             cmd->releaseRef();
             if (num_cmd == info->num_cmd) {
-                ALOGE("Cancelling command %p:%s did not work", cmd, cmd->getType());
                 bad_commands++;
             }
         }
@@ -480,12 +473,12 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
     wake_reason_stat->driver_fw_local_wake_cnt = NULL;
     free(info->wifi_wake_reason_cnt);
     info->wifi_wake_reason_cnt = NULL;
-	
+
     if(info->pkt_fate_stats) {
         free(info->pkt_fate_stats);
         info->pkt_fate_stats = NULL;
     }
-		
+
 
     if (write(info->cleanup_socks[0], "T", 1) < 1) {
         ALOGE("could not write to cleanup socket");
@@ -516,7 +509,7 @@ void wifi_event_loop(wifi_handle handle)
     pollfd pfd[2];
     memset(&pfd[0], 0, sizeof(pollfd) * 2);
 
-    pfd[0].fd = nl_socket_get_fd(info->event_sock);	
+    pfd[0].fd = nl_socket_get_fd(info->event_sock);
     pfd[0].events = POLLIN;
     pfd[1].fd = info->cleanup_socks[1];
     pfd[1].events = POLLIN;
@@ -722,7 +715,7 @@ private:
 
 public:
     SetNodfsFlag(wifi_interface_handle handle, u32 nodfs)
-        : WifiCommand("SetNodfsFlag", handle, 0) 
+        : WifiCommand("SetNodfsFlag", handle, 0)
     {
         nodFs = nodfs;
     }
@@ -753,7 +746,7 @@ private:
 
 public:
     SetCountryCodeCommand(wifi_interface_handle handle, const char *country_code)
-        : WifiCommand("SetCountryCodeCommand", handle, 0) 
+        : WifiCommand("SetCountryCodeCommand", handle, 0)
     {
         mCountryCode = country_code;
     }
@@ -901,7 +894,7 @@ public:
            ALOGE("RSSI monitor: No data");
            return NL_SKIP;
        }
-       
+
        if(event_id == NXP_EVENT_RSSI_MONITOR){
            struct nlattr *tb_vendor[NXP_ATTR_RSSI_MONITOR_MAX + 1];
            nla_parse(tb_vendor, NXP_ATTR_RSSI_MONITOR_MAX, vendor_data, len, NULL);
@@ -976,7 +969,7 @@ public:
     }
 };
 
-class GetConcurrencyMatrix : public WifiCommand 
+class GetConcurrencyMatrix : public WifiCommand
 {
 private:
     int setMax;
@@ -1042,7 +1035,7 @@ private:
 
 public:
     ConfigureNdOffLoad(wifi_interface_handle iface, u8 enable)
-    : WifiCommand("ConfigureNdOffLoad", iface, 0) 
+    : WifiCommand("ConfigureNdOffLoad", iface, 0)
     {
         Enable = enable;
     }
@@ -1070,7 +1063,7 @@ private:
     char* mProgram;
 
 public:
-    SetPacketFilterCommand(wifi_interface_handle iface, const u8* program, 
+    SetPacketFilterCommand(wifi_interface_handle iface, const u8* program,
                                    u32 len)
     : WifiCommand("SetPacketFilterCommand", iface, 0)
     {
@@ -1102,7 +1095,7 @@ public:
 };
 
 class GetPacketFilterCapaCommand : public WifiCommand {
-private: 
+private:
     u32 *mVersion;
     u32 *mMax_len;
 
@@ -1242,7 +1235,7 @@ public:
             ALOGE("NXP_ATTR_VALID_CHANNEL_LIST not found");
             return WIFI_ERROR_INVALID_ARGS;
         }
-        memcpy(Channels, (wifi_channel *)nla_data(tb_vendor[NXP_ATTR_VALID_CHANNEL_LIST]), 
+        memcpy(Channels, (wifi_channel *)nla_data(tb_vendor[NXP_ATTR_VALID_CHANNEL_LIST]),
                 sizeof(wifi_channel) * (*numChannels));
         return NL_OK;
     }
@@ -1404,7 +1397,7 @@ wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_handle
 {
     int ret = 0;
     wifi_handle handle = getWifiHandle(iface);
-    RSSIMonitorControl *StartRSSI = new RSSIMonitorControl(id, iface, max_rssi, 
+    RSSIMonitorControl *StartRSSI = new RSSIMonitorControl(id, iface, max_rssi,
                                                            min_rssi, eh);
     wifi_register_cmd(handle, id, StartRSSI);
     ret = StartRSSI->start();
