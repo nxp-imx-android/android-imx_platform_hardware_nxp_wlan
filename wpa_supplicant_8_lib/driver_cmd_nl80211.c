@@ -1,4 +1,5 @@
 /*
+ * Copyright 2012-2020 NXP
  * Driver interaction with extended Linux CFG8021
  *
  * This program is free software; you can redistribute it and/or modify
@@ -239,6 +240,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
         return -ENOMEM;
 
     memcpy(alpha2, cmd + strlen("COUNTRY") + 1, strlen(cmd) - strlen("COUNTRY") - 1);
+    alpha2[2] = '\0';
     if (!nl80211_cmd(drv, msg, 0, NL80211_CMD_REQ_SET_REG) ||
     nla_put_string(msg, NL80211_ATTR_REG_ALPHA2, alpha2)) {
         nlmsg_free(msg);

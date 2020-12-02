@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2020 NXP
+ * Portions copyright 2012-2020 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@
 using namespace android;
 
 typedef enum {
+    NXP_ATTR_OFFLOAD_INVALID = 0,
     NXP_ATTR_OFFLOAD_PACKET_ID,
     NXP_ATTR_OFFLOAD_PACKET_ETHER_TYPE,
     NXP_ATTR_OFFLOAD_PACKET_IP_PKT,
@@ -93,6 +94,12 @@ public:
     {
         Id = id;
         Type = cmdType;
+        etherType = 0;
+        ipPacket = NULL;
+        packetLen = 0;
+        srcMacAddr = NULL;
+        dstMacAddr = NULL;
+        periodMsec = 0;
     }
 
     virtual int create(){

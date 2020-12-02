@@ -1,4 +1,5 @@
 /*
+ * Copyright 2012-2020 NXP
  * Driver interaction with extended Linux Wireless Extensions
  *
  * This program is free software; you can redistribute it and/or modify

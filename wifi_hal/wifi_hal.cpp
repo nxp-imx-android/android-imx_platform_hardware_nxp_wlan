@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2020 NXP
+ * Portions copyright 2012-2020 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -311,8 +311,8 @@ wifi_error wifi_initialize(wifi_handle *handle)
     event_sock = wifi_create_nl_socket(WIFI_HAL_EVENT_SOCK_PORT);
     if (event_sock == NULL) {
         ALOGE("Could not create handle");
-        nl_socket_free(cmd_sock);
-        return WIFI_ERROR_UNKNOWN;
+        ret = WIFI_ERROR_UNKNOWN;
+        goto exit;
     }
 
     cb = nl_socket_get_cb(event_sock);
@@ -386,10 +386,10 @@ wifi_error wifi_initialize(wifi_handle *handle)
     ALOGV("Initialized Wifi HAL Successfully; vendor cmd = %d", NL80211_CMD_VENDOR);
 exit:
     if (ret != WIFI_SUCCESS) {
-        if (cmd_sock)
-            nl_socket_free(cmd_sock);
         if (event_sock)
             nl_socket_free(event_sock);
+        if (cmd_sock)
+            nl_socket_free(cmd_sock);
         if (info) {
             if (info->cmd) free(info->cmd);
             if (info->event_cb) free(info->event_cb);
@@ -809,11 +809,20 @@ public:
         maxRSSI = max_rssi;
         minRSSI = min_rssi;
         handler = eh;
+        currRSSI = 0;
+        memset(BSSID, 0, sizeof(BSSID));
     }
 
     RSSIMonitorControl(wifi_request_id id, wifi_interface_handle handle)
         : WifiCommand("RSSIMonitorControl", handle, id)
-        { }
+    {
+        maxRSSI = 0;
+        minRSSI = 0;
+        //handler.on_rssi_threshold_breached = NULL;
+        memset(&handler, 0, sizeof(handler));
+        currRSSI = 0;
+        memset(BSSID, 0, sizeof(BSSID));
+    }
 
     int createRequest(WifiRequest& request) {
         u32 enable = 1;
@@ -1284,7 +1293,8 @@ static int wifi_get_multicast_id(wifi_handle handle, const char *name, const cha
 static bool is_wifi_interface(const char *name)
 {
     if (strncmp(name, "wlan", 4) != 0 && strncmp(name, "p2p", 3) != 0 &&
-          strncmp(name, "mlan", 4) != 0 && strncmp(name, "nan", 3) != 0) {
+          strncmp(name, "mlan", 4) != 0 && strncmp(name, "nan", 3) != 0 &&
+          strncmp(name, "uap", 3) != 0) {
         /* not a wifi interface; ignore it */
         return false;
     } else {
