@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2020 NXP 
+ * Portions copyright 2012-2020 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,6 +205,13 @@ public:
     {
         ringName = ring_name;
         Type = cmdType;
+        numRings = NULL;
+        ringStatus = NULL;
+        Support = NULL;
+        verboseLevel = 0;
+        Flags = 0;
+        maxIntervalSec = 0;
+        minDataSize = 0;
     }
 
     // constructor for ring status
@@ -215,6 +222,12 @@ public:
         numRings = num_rings;
         ringStatus = status;
         Type = cmdType;
+        Support = NULL;
+        verboseLevel = 0;
+        Flags = 0;
+        maxIntervalSec = 0;
+        minDataSize = 0;
+        ringName = NULL;
     }
 
     // constructor for feature set
@@ -224,6 +237,13 @@ public:
     {
         Support = support;
         Type = cmdType;
+        numRings = NULL;
+        ringStatus = NULL;
+        verboseLevel = 0;
+        Flags = 0;
+        maxIntervalSec = 0;
+        minDataSize = 0;
+        ringName = NULL;
     }
 
     // constructor for start logging
@@ -238,6 +258,9 @@ public:
         minDataSize = min_data_size;
         ringName = ring_name;
         Type = cmdType;
+        numRings = NULL;
+        ringStatus = NULL;
+        Support = NULL;
     }
 
     int createRequest(WifiRequest &request) {
@@ -688,18 +711,18 @@ wifi_error wifi_start_wake_reason_cnt(hal_info *info)
         free(mWifiWakeReasonCnt);
         return WIFI_ERROR_OUT_OF_MEMORY;
     }
-    memset(mWifiWakeReasonCnt->cmd_event_wake_cnt, 0, sizeof(sizeof(int) * DEFAULT_CMD_EVENT_WAKE_CNT_SZ));
+    memset(mWifiWakeReasonCnt->cmd_event_wake_cnt, 0, sizeof(int) * DEFAULT_CMD_EVENT_WAKE_CNT_SZ);
     mWifiWakeReasonCnt->cmd_event_wake_cnt_sz = DEFAULT_CMD_EVENT_WAKE_CNT_SZ;
 
     mWifiWakeReasonCnt->driver_fw_local_wake_cnt = (int*)malloc(sizeof(int) * DEFAULT_DRIVER_FW_LOCAL_WAKE_CNT_SZ);
     if (!(mWifiWakeReasonCnt->driver_fw_local_wake_cnt)) {
         ALOGE("WiFi Logger: wake_reason_stat driver_fw_local_wake_cnt alloc failed");
-        free(mWifiWakeReasonCnt);
         free(mWifiWakeReasonCnt->cmd_event_wake_cnt);
+        free(mWifiWakeReasonCnt);
         return WIFI_ERROR_OUT_OF_MEMORY;
     }
     memset(mWifiWakeReasonCnt->driver_fw_local_wake_cnt, 0, 
-           sizeof(sizeof(int) * DEFAULT_DRIVER_FW_LOCAL_WAKE_CNT_SZ));
+           sizeof(int) * DEFAULT_DRIVER_FW_LOCAL_WAKE_CNT_SZ);
     mWifiWakeReasonCnt->driver_fw_local_wake_cnt_sz = DEFAULT_DRIVER_FW_LOCAL_WAKE_CNT_SZ;
     info->wifi_wake_reason_cnt = mWifiWakeReasonCnt;
 
@@ -713,9 +736,9 @@ wifi_error wifi_start_wake_reason_cnt(hal_info *info)
         return result;
     } else {
         ALOGE("Out of memory");
-        free(mWifiWakeReasonCnt);
-        free(mWifiWakeReasonCnt->cmd_event_wake_cnt);
         free(mWifiWakeReasonCnt->driver_fw_local_wake_cnt);
+        free(mWifiWakeReasonCnt->cmd_event_wake_cnt);
+        free(mWifiWakeReasonCnt);
         return WIFI_ERROR_OUT_OF_MEMORY;
     }
 }
@@ -970,6 +993,8 @@ public:
         buffSize = 0;
         Buff = NULL;
         Type = cmdType;
+        memset(&Callbacks, 0, sizeof(Callbacks));
+        mStatus = 0;
     }
 
     //Constructor for get driver memory dumps
@@ -982,6 +1007,8 @@ public:
         buffSize = 0;
         Buff = NULL;
         Type = cmdType;
+        memset(&Handler, 0, sizeof(Handler));
+        mStatus = 0;
     }
 
     int createRequest(WifiRequest &request) {
@@ -1034,6 +1061,7 @@ public:
         int path_len = 0;
         char *buffer = NULL;
         char full_path[MEM_DUMP_PATH_LENGTH];
+        long int ftell_ret_val = 0;
 
         if (reply.get_cmd() != NL80211_CMD_VENDOR) {
             ALOGE("Ignoring reply with cmd = %d", reply.get_cmd());
@@ -1069,10 +1097,26 @@ public:
                     return NL_SKIP;
                 }
                 fseek(dumpPtr, 0, SEEK_END);
-                buffSize = ftell(dumpPtr);
+                ftell_ret_val = ftell(dumpPtr);
+                if(ftell_ret_val < 0) {
+                    ALOGE("failed to get current position of file pointer");
+                    if(dumpPtr) {
+                       fclose(dumpPtr);
+                       dumpPtr = NULL;
+                    }
+                    mStatus = WIFI_ERROR_NOT_SUPPORTED;
+                    return NL_SKIP;
+                }
+                else {
+                    buffSize = ftell_ret_val;
+                }
                 Buff = (char *)malloc(sizeof(char) * buffSize);
                 if(!Buff){
                     ALOGE("Failed to allocate buffer for firmware memory dump");
+                    if(dumpPtr) {
+                       fclose(dumpPtr);
+                       dumpPtr = NULL;
+                    }
                     mStatus = WIFI_ERROR_NOT_SUPPORTED;
                     return NL_SKIP;
                 }
@@ -1126,10 +1170,26 @@ public:
                     return NL_SKIP;
                 }
                 fseek(dumpPtr, 0, SEEK_END);
-                buffSize = ftell(dumpPtr);
+                ftell_ret_val = ftell(dumpPtr);
+                if(ftell_ret_val < 0) {
+                    ALOGE("failed to get current position of file pointer");
+                    if(dumpPtr) {
+                       fclose(dumpPtr);
+                       dumpPtr = NULL;
+                    }
+                    mStatus = WIFI_ERROR_NOT_SUPPORTED;
+                    return NL_SKIP;
+                }
+                else {
+                    buffSize = ftell_ret_val;
+                }
                 Buff = (char *)malloc(sizeof(char) * buffSize);
                 if(!Buff){
                     ALOGE("Failed to allocate buffer for driver memory dump");
+                    if(dumpPtr){
+                       fclose(dumpPtr);
+                       dumpPtr = NULL;
+                    }
                     mStatus = WIFI_ERROR_NOT_SUPPORTED;
                     return NL_SKIP;
                 }
@@ -1173,8 +1233,10 @@ public:
         }
         if(Buff)
             free(Buff);
-        fclose(dumpPtr);
-        dumpPtr = NULL;
+        if(dumpPtr) {
+           fclose(dumpPtr);
+           dumpPtr = NULL;
+        }
         return NL_OK;
     }
 

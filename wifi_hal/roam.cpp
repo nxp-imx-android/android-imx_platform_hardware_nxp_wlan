@@ -1,5 +1,5 @@
 /*
-* Copyright 2020 NXP
+* Copyright 2012-2020 NXP
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ public:
 
     virtual int create(){
         int ret = 0;
-        mMsg.create(MARVELL_OUI, NXP_SUBCMD_ENABLE_FW_ROAMING);
+        ret = mMsg.create(MARVELL_OUI, NXP_SUBCMD_ENABLE_FW_ROAMING);
         if (ret < 0) {
             ALOGE("Failed to create message to enable firmware roaming\n");
             return ret;
