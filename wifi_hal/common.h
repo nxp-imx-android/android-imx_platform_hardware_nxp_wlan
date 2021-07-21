@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2012-2020 NXP
+ * Portions copyright 2015-2021 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "007"
+#define WIFI_HAL_VERSION      "008.002"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))

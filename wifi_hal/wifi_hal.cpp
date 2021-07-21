@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2012-2020 NXP
+ * Portions copyright 2015-2020 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,8 +63,9 @@
 * Defines for wifi_wait_for_driver_ready()
 * Specify durations between polls and max wait time
 */
-#define POLL_DRIVER_DURATION_US (100000)
-#define POLL_DRIVER_MAX_TIME_MS (20000)
+#define POLL_DRIVER_DURATION_US (100000)  /*100ms*/
+#define POLL_DRIVER_MAX_TIME_MS (20000)  /*20s*/
+
 
 static void internal_event_handler(wifi_handle handle, int events);
 static int internal_no_seq_check(nl_msg *msg, void *arg);
@@ -404,7 +405,7 @@ wifi_error wifi_wait_for_driver_ready(void)
 {
 
     // This function will wait to make sure basic client netdev is created
-    // Function times out after 10 seconds
+    // Function times out after 20 seconds
     int count = (POLL_DRIVER_MAX_TIME_MS * 1000) / POLL_DRIVER_DURATION_US;
     FILE *fd;
 
@@ -413,12 +414,14 @@ wifi_error wifi_wait_for_driver_ready(void)
             fclose(fd);
             return WIFI_SUCCESS;
         }
-    usleep(POLL_DRIVER_DURATION_US);
+        usleep(POLL_DRIVER_DURATION_US);
     } while(--count > 0);
 
-    ALOGE("Timed out wating on Driver ready ... ");
+    ALOGE("Timed out waiting on Driver ready ... ");
     return WIFI_ERROR_TIMED_OUT;
 }
+
+
 
 static int wifi_add_membership(wifi_handle handle, const char *group)
 {

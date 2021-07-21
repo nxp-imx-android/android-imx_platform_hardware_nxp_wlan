@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2012-2020 NXP
+ * Portions copyright 2015-2020 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -993,6 +993,7 @@ public:
         buffSize = 0;
         Buff = NULL;
         Type = cmdType;
+        // Callbacks.on_driver_memory_dump = NULL;
         memset(&Callbacks, 0, sizeof(Callbacks));
         mStatus = 0;
     }
@@ -1007,6 +1008,7 @@ public:
         buffSize = 0;
         Buff = NULL;
         Type = cmdType;
+        // Handler.on_firmware_memory_dump = NULL;
         memset(&Handler, 0, sizeof(Handler));
         mStatus = 0;
     }
