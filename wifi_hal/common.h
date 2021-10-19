@@ -22,6 +22,7 @@
 #define __WIFI_HAL_COMMON_H__
 
 #define LOG_TAG  "WifiHAL"
+#define SUPPORT_INBAND_IR true
 
 #include <pthread.h>
 #include "nl80211_copy.h"
@@ -53,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "008.002"
+#define WIFI_HAL_VERSION      "008.004"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))
@@ -125,6 +126,8 @@ public:
 #define nl80211_handle_destroy nl_socket_free
 
 const uint32_t MARVELL_OUI = 0x005043;
+#define NXP_EVENT_DRIVER_HANG 0x0
+#define NXP_EVENT_DUMP_DONE 0x1
 
 /* vendor commands define */
 typedef enum {

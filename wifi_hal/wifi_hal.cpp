@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2015-2020 NXP
+ * Portions copyright 2015-2021 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <netlink/attr.h>
 #include <netlink/msg.h>
 
+#include <sys/stat.h>
 #include <dirent.h>
 #include <net/if.h>
 
@@ -280,6 +281,164 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     return WIFI_SUCCESS;
 }
 
+#if (SUPPORT_INBAND_IR == true)
+/* proc fs node for Wifi in-band reset */
+#define VENDOR_INBAND_IR_PROC_NODE "/proc/mwlan/adapter0/config"
+
+int wifi_vnd_write_inband_IR_proc() {
+
+    int fd;
+    char buffer[] = "fw_reload=1";
+
+    fd = open(VENDOR_INBAND_IR_PROC_NODE, O_WRONLY);
+    if (fd < 0)
+    {
+        ALOGE("wifi_vnd_write_inband_IR_proc : open(%s) for write failed: %s (%d)",
+            VENDOR_INBAND_IR_PROC_NODE, strerror(errno), errno);
+        return -1;
+    }
+
+        if (write(fd, buffer, strlen(buffer)) < 0)
+            {
+                ALOGE("wifi_vnd_write_inband_IR_proc : write(%s) failed: %s (%d)",
+                        VENDOR_INBAND_IR_PROC_NODE, strerror(errno),errno);
+            }
+            else
+            {
+                ALOGE("wifi_vnd_write_inband_IR_proc : write %s to %s\n", buffer, VENDOR_INBAND_IR_PROC_NODE);
+            }
+
+    if (fd >= 0)
+        close(fd);
+    return 0;
+}
+#endif //SUPPORT_INBAND_IR
+
+int handle_driver_hang_event(struct nl_msg *msg, void *arg)
+{
+    ALOGE("Wifi driver hang event received\n");
+
+/*Trigger inband independant reset for firmware reload*/
+#if (SUPPORT_INBAND_IR == true)
+    wifi_vnd_write_inband_IR_proc();
+#endif
+    return 0;
+}
+
+#define drv_dump_proc "/proc/mwlan/adapter0/drv_dump"
+#define fw_dump_proc "/proc/mwlan/adapter0/fw_dump"
+#define drv_dump_proc2 "/proc/mwlan/adapter1/drv_dump"
+#define fw_dump_proc2 "/proc/mwlan/adapter1/fw_dump"
+#define MAX_LEN_SINGLE_LINE 400
+
+int copy_drv_dump(const char *source, char *dest)
+{
+    FILE *from_file = NULL, *to_file = NULL;
+    char buffer[1024];
+
+    from_file = fopen(source, "r");
+    if(from_file == NULL)
+        return -1;
+
+    to_file = fopen(dest, "w+");
+    if(to_file == NULL)
+    {
+        fclose(from_file);
+        return -1;
+    }
+
+    memset(buffer, 0, sizeof(buffer));
+    while(fgets(buffer, MAX_LEN_SINGLE_LINE, from_file))
+    {
+        fputs(buffer, to_file);
+    }
+    fclose(from_file);
+    fclose(to_file);
+    return 0;
+}
+
+int copy_fw_dump(const char *source, char *dest)
+{
+    FILE *from_file = NULL, *to_file = NULL;
+    char buffer[1024];
+    int ret;
+
+    from_file = fopen(source, "rb");
+    if(from_file == NULL)
+     return -1;
+
+    to_file = fopen(dest, "wb");
+    if(to_file == NULL)
+    {
+        fclose(from_file);
+        return -1;
+    }
+
+    memset(buffer, 0, sizeof(buffer));
+    while(1)
+    {
+        ret = fread(buffer, 1, 1024, from_file);
+        if(ret > 0) {
+            fwrite(buffer, 1, ret, to_file);
+        }
+        else
+            break;
+    }
+    fclose(from_file);
+    fclose(to_file);
+    return 0;
+
+}
+/* function to copy dump files from /proc to /data/vendor*/
+int generate_dump_files(char * dumpdir)
+{
+    FILE *from_file = NULL, *to_file = NULL;
+    char drv_dump_file[250], fw_dump_file[250];
+    char drv_dump_file2[250], fw_dump_file2[250];
+    char buffer_fw[1024];
+
+    sprintf(drv_dump_file, "%s/drv_dump", dumpdir);
+    sprintf(fw_dump_file, "%s/fw_dump", dumpdir);
+    sprintf(drv_dump_file2, "%s/drv_dump_2", dumpdir);
+    sprintf(fw_dump_file2, "%s/fw_dump_2", dumpdir);
+
+    if(!copy_drv_dump((const char *)drv_dump_proc, drv_dump_file))
+        ALOGD("Wifi: drv dump generated successfully\n");
+    if(!copy_drv_dump((const char *)drv_dump_proc2, drv_dump_file2))
+        ALOGD("Wifi: drv dump2 generated successfully\n");
+
+    if(!copy_fw_dump((const char *)fw_dump_proc, fw_dump_file))
+        ALOGD("Wifi: fw dump generated successfully\n");
+    if(!copy_fw_dump((const char *)fw_dump_proc2, fw_dump_file2))
+        ALOGD("Wifi: fw dump2 generated successfully\n");
+
+    return 0;
+}
+
+int handle_dump_done_event(struct nl_msg *msg, void *arg)
+{
+    int rand_num;
+    char dumpdir[100];
+
+    ALOGD("Wifi driver dump done event received\n");
+    srand(time(0));
+    rand_num = rand();
+    sprintf(dumpdir, "%s%d", "/data/vendor/wifi/wifi_dumps/dump_", rand_num);
+    ALOGD("Wifi driver dump %s", dumpdir);
+    rand_num = mkdir(dumpdir, 0777);
+    if(rand_num){
+        ALOGD("Wifi dumpdir %s cant be generated \n", dumpdir);
+        return -1;
+    }
+    if(generate_dump_files(dumpdir))
+    {
+        ALOGD("Wifi driver dump failed \n");
+        return -1;
+    }
+    ALOGD("Wifi driver dump completed \n");
+    return 0;
+}
+
 wifi_error wifi_initialize(wifi_handle *handle)
 {
     struct nl_cb *cb = NULL;
@@ -384,7 +543,14 @@ wifi_error wifi_initialize(wifi_handle *handle)
 
     srand(getpid());
 
-    ALOGV("Initialized Wifi HAL Successfully; vendor cmd = %d", NL80211_CMD_VENDOR);
+    wifi_register_vendor_handler(*handle,
+           MARVELL_OUI, NXP_EVENT_DRIVER_HANG, &handle_driver_hang_event,  NULL);
+
+    wifi_register_vendor_handler(*handle,
+           MARVELL_OUI, NXP_EVENT_DUMP_DONE, &handle_dump_done_event,  NULL);
+
+    ALOGD("Initialized Wifi HAL Successfully; vendor cmd = %d", NL80211_CMD_VENDOR);
+    ALOGD("Wifi HAL version : %s",WIFI_HAL_VERSION);
 exit:
     if (ret != WIFI_SUCCESS) {
         if (event_sock)
