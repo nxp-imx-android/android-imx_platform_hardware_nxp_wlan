@@ -314,6 +314,23 @@ int wifi_vnd_write_inband_IR_proc() {
 }
 #endif //SUPPORT_INBAND_IR
 
+/*Function to force interface up on IR*/
+void interface_up()
+{
+    int sockfd, ret;
+    struct ifreq ifr;
+
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0)
+        return;
+    memset(&ifr, 0, sizeof ifr);
+    strncpy(ifr.ifr_name, "wlan0", IFNAMSIZ);
+    ifr.ifr_flags |= IFF_UP;
+
+    ret = ioctl(sockfd, SIOCSIFFLAGS, &ifr);
+    ALOGD("Interface UP: ioctl returned = %d",ret);
+}
+
 int handle_driver_hang_event(struct nl_msg *msg, void *arg)
 {
     ALOGE("Wifi driver hang event received\n");
@@ -321,7 +338,9 @@ int handle_driver_hang_event(struct nl_msg *msg, void *arg)
 /*Trigger inband independant reset for firmware reload*/
 #if (SUPPORT_INBAND_IR == true)
     wifi_vnd_write_inband_IR_proc();
+    interface_up();
 #endif
+
     return 0;
 }
 
@@ -330,6 +349,8 @@ int handle_driver_hang_event(struct nl_msg *msg, void *arg)
 #define drv_dump_proc2 "/proc/mwlan/adapter1/drv_dump"
 #define fw_dump_proc2 "/proc/mwlan/adapter1/fw_dump"
 #define MAX_LEN_SINGLE_LINE 400
+#define MAX_FW_DUMP 255
+u32 maxFwDump;
 
 int copy_drv_dump(const char *source, char *dest)
 {
@@ -356,6 +377,38 @@ int copy_drv_dump(const char *source, char *dest)
     fclose(to_file);
     return 0;
 }
+
+int parse_fw_dump_cfg_file(const char *source)
+{
+    FILE *from_file = NULL;
+    char buffer[1024];
+    char *token = NULL;
+
+    from_file = fopen(source, "r");
+    if(from_file == NULL) {
+        maxFwDump = MAX_FW_DUMP;
+        return -1;
+    }
+    memset(buffer, 0, sizeof(buffer));
+    while (fgets(buffer, 255, from_file) != NULL) {
+        if (buffer[0] == '#')
+            continue;
+        token = strtok(buffer, "=");
+        if (token == NULL)
+			continue;
+        if (strcmp((const char *)token, "MAX_FW_DUMP") == 0) {
+            token = strtok(NULL, "\n");
+            if (token)
+                maxFwDump = atoi(token);
+            ALOGD("MaxFwDump: %d\n", maxFwDump);
+        }
+    }
+    if (maxFwDump == 0)
+        maxFwDump = MAX_FW_DUMP;
+    fclose(from_file);
+    return 0;
+}
+
 
 int copy_fw_dump(const char *source, char *dest)
 {
@@ -418,9 +471,22 @@ int generate_dump_files(char * dumpdir)
 int handle_dump_done_event(struct nl_msg *msg, void *arg)
 {
     int rand_num;
-    char dumpdir[100];
+    char dumpdir[100], dump_cfg[100];
+    static u8 dump_cnt = 0;
+    char fw_dump_cfg[250] = {0};
+    sprintf(dump_cfg, "%s", "/vendor/etc/wifi/");
+    if (dump_cnt == 0) {
+        sprintf(fw_dump_cfg, "%swlan_vendor.conf", dump_cfg);
+        ALOGD("dump file: %s\n", fw_dump_cfg);
+        parse_fw_dump_cfg_file(fw_dump_cfg);
+    }
 
     ALOGD("Wifi driver dump done event received\n");
+    if (dump_cnt >= maxFwDump) {
+        ALOGD("Wifi driver dump overflow MAX LIMIT(%d)\n", maxFwDump);
+        return -1;
+    }
+
     srand(time(0));
     rand_num = rand();
     sprintf(dumpdir, "%s%d", "/data/vendor/wifi/wifi_dumps/dump_", rand_num);
@@ -436,6 +502,7 @@ int handle_dump_done_event(struct nl_msg *msg, void *arg)
         return -1;
     }
     ALOGD("Wifi driver dump completed \n");
+    dump_cnt++;
     return 0;
 }
 

@@ -54,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "008.004"
+#define WIFI_HAL_VERSION      "008.006"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))
