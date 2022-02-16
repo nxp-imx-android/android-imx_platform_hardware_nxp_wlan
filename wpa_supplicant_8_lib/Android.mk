@@ -25,6 +25,7 @@ WPA_SUPPL_DIR = external/wpa_supplicant_8
 WPA_SRC_FILE :=
 
 include $(WPA_SUPPL_DIR)/wpa_supplicant/android.config
+include $(LOCAL_PATH)/android.config
 
 WPA_SUPPL_DIR_INCLUDE = $(WPA_SUPPL_DIR)/src \
 	$(WPA_SUPPL_DIR)/src/common \
@@ -54,6 +55,10 @@ L_CFLAGS_64 += -mabi=lp64
 
 ifdef CONFIG_ANDROID_LOG
 L_CFLAGS += -DCONFIG_ANDROID_LOG
+endif
+
+ifdef CONFIG_ANDROID_12
+L_CFLAGS += -DANDROID_12
 endif
 
 ########################

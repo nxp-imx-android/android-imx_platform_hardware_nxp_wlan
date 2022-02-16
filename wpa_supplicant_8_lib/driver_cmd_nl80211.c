@@ -26,7 +26,11 @@
 #include "common/qca-vendor-attr.h"
 #include "driver_nl80211.h"
 #include "wpa_supplicant_i.h"
+#ifdef ANDROID_12
+#include "../wpa_supplicant/config.h"
+#else
 #include "config.h"
+#endif
 #ifdef ANDROID
 #include "android_drv.h"
 #endif
@@ -78,7 +82,7 @@ static int get_power_mode_handler(struct nl_msg *msg, void *arg)
     return NL_SKIP;
 }
 
-#if 0
+
 #ifndef HOSTAPD
 #define NL80211_BGSCAN_HEADER           "BGSCAN-CONFIG "
 #define NL80211_BGSCAN_HEADER_SIZE      14
@@ -219,7 +223,6 @@ static int wpa_driver_set_backgroundscan_params(void *priv, char *cmd)
     return ret;
 }
 #endif
-#endif
 
 int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
                   size_t buf_len )
@@ -264,7 +267,6 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
     } else if (os_strcasecmp(cmd, "RELOAD") == 0) {
         wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "HANGED");
     } else { /* Use private command */
-#if 0
 #ifndef HOSTAPD
         if (os_strncasecmp(cmd, "BGSCAN-START", 12) == 0) {
             /* Issue a command 'BGSCAN-CONFIG' to driver */
@@ -275,7 +277,6 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
             }
             return ret;
         } else
-#endif
 #endif
         {
             os_memcpy(buf, cmd, strlen(cmd) + 1);

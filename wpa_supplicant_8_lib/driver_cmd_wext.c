@@ -39,7 +39,6 @@
 #ifdef ANDROID
 #include "android_drv.h"
 #endif /* ANDROID */
-//#include <stdbool.h>
 
 #define RSSI_CMD			"RSSI"
 #define LINKSPEED_CMD			"LINKSPEED"
