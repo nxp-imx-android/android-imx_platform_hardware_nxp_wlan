@@ -71,6 +71,8 @@ LOCAL_CFLAGS += -Werror -Wno-unused-parameter -Wno-macro-redefined
 LOCAL_SRC_FILES := $(WPA_SRC_FILE)
 LOCAL_C_INCLUDES := $(WPA_SUPPL_DIR_INCLUDE)
 LOCAL_PROPRIETARY_MODULE := true
+LOCAL_SANITIZE := cfi
+LOCAL_SANITIZE_DIAG := cfi
 include $(BUILD_STATIC_LIBRARY)
 
 ########################
