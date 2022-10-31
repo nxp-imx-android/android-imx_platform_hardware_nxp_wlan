@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2015-2021 NXP
+ * Portions copyright 2015-2022 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "008.008"
+#define WIFI_HAL_VERSION      "009.004"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))
@@ -128,6 +128,9 @@ public:
 const uint32_t MARVELL_OUI = 0x005043;
 #define NXP_EVENT_DRIVER_HANG 0x0
 #define NXP_EVENT_DUMP_DONE 0x1
+#define NXP_EVENT_FW_RESET_SUCCESS 0x2
+#define NXP_EVENT_FW_RESET_FAILURE 0x3
+#define NXP_EVENT_FW_RESET_START 0x4
 
 /* vendor commands define */
 typedef enum {

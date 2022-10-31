@@ -62,10 +62,11 @@
 
 /*
 * Defines for wifi_wait_for_driver_ready()
-* Specify durations between polls and max wait time
+* Specify durations between polls and max wait time 
 */
 #define POLL_DRIVER_DURATION_US (100000)  /*100ms*/
 #define POLL_DRIVER_MAX_TIME_MS (20000)  /*20s*/
+#define POLL_FW_RESET_STATUS_TIME_MS (3000)  /*3s*/
 
 
 static void internal_event_handler(wifi_handle handle, int events);
@@ -82,7 +83,7 @@ wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_handle i
 /**
 * API to set packe filter
 * @param program        pointer to the program byte-code
-* @param len               length of the program byte_code
+* @param len               length of the program byte_code 
 */
 wifi_error wifi_set_packet_filter(wifi_interface_handle iface, const u8* program, u32 len);
 wifi_error wifi_start_wake_reason_cnt(hal_info * info);
@@ -93,9 +94,9 @@ wifi_error wifi_start_wake_reason_cnt(hal_info * info);
 * @param max_len       pointer to maximum size of the filter bytecode, filled in upon return
 */
 wifi_error wifi_get_packet_filter_capabilities(wifi_interface_handle handle, u32* version, u32* max_len);
-wifi_error wifi_get_wake_reason_stats(wifi_interface_handle iface,
+wifi_error wifi_get_wake_reason_stats(wifi_interface_handle iface, 
                                             WLAN_DRIVER_WAKE_REASON_CNT *wifi_wake_reason_cnt);
-wifi_error wifi_get_valid_channels(wifi_interface_handle handle, int band, int max_channels,
+wifi_error wifi_get_valid_channels(wifi_interface_handle handle, int band, int max_channels, 
                                         wifi_channel *channels, int *num_channels);
 
 typedef enum wifi_attr {
@@ -141,7 +142,7 @@ enum wifi_attr_nd_offload
     NXP_WIFI_ATTR_ND_OFFLOAD_AFTER_LAST - 1,
 };
 
-enum wifi_attr_packet_filter
+enum wifi_attr_packet_filter 
 {
     NXP_ATTR_PACKET_FILTER_INVALID = 0,
     NXP_ATTR_PACKET_FILTER_TOTAL_LENGTH,
@@ -197,7 +198,7 @@ static nl_sock * wifi_create_nl_socket(int port)
         nl_socket_free(sock);
         return NULL;
     }
-
+    
     return sock;
 }
 
@@ -344,6 +345,55 @@ int handle_driver_hang_event(struct nl_msg *msg, void *arg)
     return 0;
 }
 
+int handle_fw_reset_success_event(struct nl_msg *msg, void *arg)
+{
+    ALOGE("Firmware reset success event received\n");
+    return 0;
+}
+
+int handle_fw_reset_failure_event(struct nl_msg *msg, void *arg)
+{
+    ALOGE("Firmware reset failure event received\n");
+    return 0;
+}
+
+int handle_fw_reset_start_event(struct nl_msg *msg, void *arg)
+{
+    ALOGE("Firmware reset start event received.\n");
+    int fd, r;
+    char buf[1];
+    int count = (POLL_FW_RESET_STATUS_TIME_MS * 1000) / POLL_DRIVER_DURATION_US;  // wait till 3000 msec
+    do {
+        // read wifi status
+        fd = open("/proc/mwlan/wifi_status", O_RDONLY);
+        if (fd >= 0)
+        {
+            r = read(fd, buf, 1);
+            if (r <= 0) {
+                ALOGE("read wifi status failed, retry later");
+            }
+            else
+            {
+                if (buf[0] == '0')
+                {
+                    ALOGE("fw reload successful, wifi status is enabled.");
+                    /*bring interface up*/
+                    interface_up();
+                    return 0;
+                }
+            }
+            close(fd);
+        }
+        else
+        {
+            ALOGE("Failed to open file /proc/mwlan/wifi_status, retry later");
+        }
+        usleep(POLL_DRIVER_DURATION_US);
+    } while(--count > 0);
+    ALOGE("Timed out waiting on fw reload operation... ");
+    return 0;
+}
+
 #define drv_dump_proc "/proc/mwlan/adapter0/drv_dump"
 #define fw_dump_proc "/proc/mwlan/adapter0/fw_dump"
 #define drv_dump_proc2 "/proc/mwlan/adapter1/drv_dump"
@@ -464,7 +514,6 @@ int generate_dump_files(char * dumpdir)
         ALOGD("Wifi: fw dump generated successfully\n");
     if(!copy_fw_dump((const char *)fw_dump_proc2, fw_dump_file2))
         ALOGD("Wifi: fw dump2 generated successfully\n");
-
     return 0;
 }
 
@@ -616,6 +665,15 @@ wifi_error wifi_initialize(wifi_handle *handle)
     wifi_register_vendor_handler(*handle,
            MARVELL_OUI, NXP_EVENT_DUMP_DONE, &handle_dump_done_event,  NULL);
 
+    wifi_register_vendor_handler(*handle,
+           MARVELL_OUI, NXP_EVENT_FW_RESET_SUCCESS, &handle_fw_reset_success_event,  NULL);
+
+    wifi_register_vendor_handler(*handle,
+           MARVELL_OUI, NXP_EVENT_FW_RESET_FAILURE, &handle_fw_reset_failure_event,  NULL);
+
+    wifi_register_vendor_handler(*handle,
+           MARVELL_OUI, NXP_EVENT_FW_RESET_START, &handle_fw_reset_start_event,  NULL);
+
     ALOGD("Initialized Wifi HAL Successfully; vendor cmd = %d", NL80211_CMD_VENDOR);
     ALOGD("Wifi HAL version : %s",WIFI_HAL_VERSION);
 exit:
@@ -737,12 +795,12 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
     wake_reason_stat->driver_fw_local_wake_cnt = NULL;
     free(info->wifi_wake_reason_cnt);
     info->wifi_wake_reason_cnt = NULL;
-
+	
     if(info->pkt_fate_stats) {
         free(info->pkt_fate_stats);
         info->pkt_fate_stats = NULL;
     }
-
+		
 
     if (write(info->cleanup_socks[0], "T", 1) < 1) {
         ALOGE("could not write to cleanup socket");
@@ -773,7 +831,7 @@ void wifi_event_loop(wifi_handle handle)
     pollfd pfd[2];
     memset(&pfd[0], 0, sizeof(pollfd) * 2);
 
-    pfd[0].fd = nl_socket_get_fd(info->event_sock);
+    pfd[0].fd = nl_socket_get_fd(info->event_sock);	
     pfd[0].events = POLLIN;
     pfd[1].fd = info->cleanup_socks[1];
     pfd[1].events = POLLIN;
@@ -979,7 +1037,7 @@ private:
 
 public:
     SetNodfsFlag(wifi_interface_handle handle, u32 nodfs)
-        : WifiCommand("SetNodfsFlag", handle, 0)
+        : WifiCommand("SetNodfsFlag", handle, 0) 
     {
         nodFs = nodfs;
     }
@@ -1010,7 +1068,7 @@ private:
 
 public:
     SetCountryCodeCommand(wifi_interface_handle handle, const char *country_code)
-        : WifiCommand("SetCountryCodeCommand", handle, 0)
+        : WifiCommand("SetCountryCodeCommand", handle, 0) 
     {
         mCountryCode = country_code;
     }
@@ -1167,7 +1225,7 @@ public:
            ALOGE("RSSI monitor: No data");
            return NL_SKIP;
        }
-
+       
        if(event_id == NXP_EVENT_RSSI_MONITOR){
            struct nlattr *tb_vendor[NXP_ATTR_RSSI_MONITOR_MAX + 1];
            nla_parse(tb_vendor, NXP_ATTR_RSSI_MONITOR_MAX, vendor_data, len, NULL);
@@ -1242,7 +1300,7 @@ public:
     }
 };
 
-class GetConcurrencyMatrix : public WifiCommand
+class GetConcurrencyMatrix : public WifiCommand 
 {
 private:
     int setMax;
@@ -1308,7 +1366,7 @@ private:
 
 public:
     ConfigureNdOffLoad(wifi_interface_handle iface, u8 enable)
-    : WifiCommand("ConfigureNdOffLoad", iface, 0)
+    : WifiCommand("ConfigureNdOffLoad", iface, 0) 
     {
         Enable = enable;
     }
@@ -1336,7 +1394,7 @@ private:
     char* mProgram;
 
 public:
-    SetPacketFilterCommand(wifi_interface_handle iface, const u8* program,
+    SetPacketFilterCommand(wifi_interface_handle iface, const u8* program, 
                                    u32 len)
     : WifiCommand("SetPacketFilterCommand", iface, 0)
     {
@@ -1368,7 +1426,7 @@ public:
 };
 
 class GetPacketFilterCapaCommand : public WifiCommand {
-private:
+private: 
     u32 *mVersion;
     u32 *mMax_len;
 
@@ -1508,7 +1566,7 @@ public:
             ALOGE("NXP_ATTR_VALID_CHANNEL_LIST not found");
             return WIFI_ERROR_INVALID_ARGS;
         }
-        memcpy(Channels, (wifi_channel *)nla_data(tb_vendor[NXP_ATTR_VALID_CHANNEL_LIST]),
+        memcpy(Channels, (wifi_channel *)nla_data(tb_vendor[NXP_ATTR_VALID_CHANNEL_LIST]), 
                 sizeof(wifi_channel) * (*numChannels));
         return NL_OK;
     }
@@ -1530,7 +1588,7 @@ static bool is_wifi_interface(const char *name)
 {
     if (strncmp(name, "wlan", 4) != 0 && strncmp(name, "p2p", 3) != 0 &&
           strncmp(name, "mlan", 4) != 0 && strncmp(name, "nan", 3) != 0 &&
-          strncmp(name, "uap", 3) != 0) {
+	  strncmp(name, "uap", 3) != 0) {
         /* not a wifi interface; ignore it */
         return false;
     } else {
@@ -1671,7 +1729,7 @@ wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_handle
 {
     int ret = 0;
     wifi_handle handle = getWifiHandle(iface);
-    RSSIMonitorControl *StartRSSI = new RSSIMonitorControl(id, iface, max_rssi,
+    RSSIMonitorControl *StartRSSI = new RSSIMonitorControl(id, iface, max_rssi, 
                                                            min_rssi, eh);
     wifi_register_cmd(handle, id, StartRSSI);
     ret = StartRSSI->start();
