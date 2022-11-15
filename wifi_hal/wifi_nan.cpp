@@ -288,6 +288,7 @@ public:
     : WifiCommand("NanControlCommand", iface, 0)
     {
         mId = id;
+        Msg = NULL;
         mtype = type;
         memset(&header, 0, sizeof(NanHeader));
     }
@@ -412,6 +413,7 @@ public:
     : WifiCommand("NanPublishReqCommand", iface, 0)
     {
         mId = id;
+        Preq = NULL;
         Pcancelreq = msg;
         memset(&publishHeader, 0, sizeof(NanHeader));
     }
@@ -508,6 +510,7 @@ public:
     {
         mId = id;
         Msg = msg;
+        cMsg = NULL;
         memset(&subscribeHeader, 0, sizeof(NanHeader));
     }
 
@@ -517,6 +520,7 @@ public:
     : WifiCommand("SubscribeReqCommand", iface, 0)
     {
         mId = id;
+        Msg = NULL;
         cMsg = msg;
         memset(&subscribeHeader, 0, sizeof(NanHeader));
     }
@@ -806,6 +810,9 @@ public:
     : WifiCommand("SetRegisterHandlerCommand", iface, 0)
     {
         mHandler = handlers;
+        memset(&mNptInd, 0, sizeof(NanPublishTerminatedInd));
+        memset(&mNstInd, 0, sizeof(NanSubscribeTerminatedInd));
+        memset(&mNDEeventInd, 0, sizeof(NanDiscEngEventInd));
     }
 
     int start(){

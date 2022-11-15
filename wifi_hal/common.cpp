@@ -283,3 +283,34 @@ void hexdump(void *buf, byte len)
     }
 }
 
+#if defined(NXP_VHAL_PRIV_CMD)
+int prepare_buffer(u8 *buffer, char* cmd, u32 num, char *args[])
+{
+    u8 *pos = NULL;
+    unsigned int i = 0;
+
+    memset(buffer, 0, BUFFER_LENGTH);
+
+    /* Flag it for our use */
+    pos = buffer;
+    memcpy((char *)pos, CMD_NXP, strlen(CMD_NXP));
+    pos += (strlen(CMD_NXP));
+
+    /* Insert command */
+    strncpy((char *)pos, (char *)cmd, strlen(cmd));
+    pos += (strlen(cmd));
+
+    /* Insert arguments */
+    for (i = 0; i < num; i++)
+    {
+        strncpy((char *)pos, args[i], strlen(args[i]));
+        pos += strlen(args[i]);
+        if (i < (num - 1)) {
+            memcpy((char *)pos, " ", strlen(" "));
+            pos += 1;
+        }
+    }
+
+    return WIFI_SUCCESS;
+}
+#endif //NXP_VHAL_PRIV_CMD

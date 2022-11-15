@@ -54,7 +54,7 @@ typedef enum {
 
     /* keep last */
     NXP_ATTR_LL_STATS_AFTER_LAST,
-    NXP_ATTR_LL_STATS_MAX =
+    NXP_ATTR_LL_STATS_MAX = 
     NXP_ATTR_LL_STATS_AFTER_LAST - 1
 
 } LINK_LAYER_ATTRIBUTE;
@@ -161,6 +161,10 @@ public:
             return NL_SKIP;
         }
         iface_stat_nxp = (wifi_iface_stat_nxp *)nla_data(tb_vendor[NXP_ATTR_LL_STATS_IFACE]);
+        if (iface_stat_nxp == NULL) {
+            ALOGE("Could not allocate iface_stat_nxp");
+            return NL_SKIP;
+        }
         iface_len = nla_len(tb_vendor[NXP_ATTR_LL_STATS_IFACE]) + sizeof(wifi_interface_handle);
         iface_stat = (wifi_iface_stat *)malloc(iface_len);
         if (iface_stat == NULL) {
@@ -169,7 +173,7 @@ public:
         }
         memset(iface_stat, 0, iface_len);
         iface_stat->iface = NULL;
-
+	
 		/*Copy the iface stat elements one by one.*/
 		memcpy((u8 *)&iface_stat->info, &iface_stat_nxp->info,sizeof(iface_stat_nxp->info));
 		iface_stat->beacon_rx = iface_stat_nxp->beacon_rx;
@@ -183,9 +187,14 @@ public:
 		iface_stat->rssi_mgmt = iface_stat_nxp->rssi_mgmt;
 		iface_stat->rssi_data = iface_stat_nxp->rssi_data;
 		iface_stat->rssi_ack = iface_stat_nxp->rssi_ack;
-		memcpy((u8 *)&iface_stat->ac, iface_stat_nxp->ac,sizeof(iface_stat_nxp->ac)*WIFI_AC_MAX);
+		memcpy((u8 *)iface_stat->ac, iface_stat_nxp->ac,sizeof(wifi_wmm_ac_stat)*WIFI_AC_MAX);
 		iface_stat->num_peers = iface_stat_nxp->num_peers;
-		memcpy((u8 *)&iface_stat->peer_info, iface_stat_nxp->peer_info,sizeof(wifi_peer_info)*iface_stat->num_peers);
+		for (i=0; i<iface_stat->num_peers; i++){
+			memcpy((u8 *)&iface_stat->peer_info[i],(u8 *)&iface_stat_nxp->peer_info[i],sizeof(wifi_peer_info));
+			memcpy((u8 *)iface_stat->peer_info[i].rate_stats,
+			       (u8 *)iface_stat_nxp->peer_info[i].rate_stats,
+			       sizeof(wifi_rate_stat)*iface_stat_nxp->peer_info[i].num_rate);
+		}
 
         /** Process Num of RADIO */
         if(!tb_vendor[NXP_ATTR_LL_STATS_NUM_RADIOS]){
@@ -244,6 +253,7 @@ public:
             radio_stat_tmp = (wifi_radio_stat *)((u8 *)radio_stat_tmp + sizeof(wifi_radio_stat) + radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
             radio_stat_nxp_tmp = (wifi_radio_stat_nxp *)((u8 *)radio_stat_nxp_tmp +sizeof(wifi_radio_stat_nxp) + radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
         }
+
 
         if (Handler.on_link_stats_results) {
             (Handler.on_link_stats_results)(id, iface_stat, num_radios, radio_stat);

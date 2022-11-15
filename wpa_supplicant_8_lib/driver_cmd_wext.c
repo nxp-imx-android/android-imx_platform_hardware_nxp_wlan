@@ -224,7 +224,7 @@ static char *getop(char *s, int *first_time)
 	char *p;
 	if (*first_time){
 		p = strtok(s, delim);
-		*first_time = false;
+		*first_time = FALSE;
 	}
 	else{
 		p = strtok(NULL, delim);
@@ -242,7 +242,7 @@ static int wpa_driver_set_backgroundscan_params(void *priv, char *cmd)
 	int ret = 0, i = 0, bp;
 	char buf[WEXT_BGCAN_BUF_LEN];
 	struct wpa_ssid *ssid_conf;
-	int first_time = true;
+	int first_time = TRUE;
 	char *opstr = NULL;
 	char *ptr = NULL;
 	int find_ssid = 0;
@@ -419,12 +419,12 @@ int wpa_driver_wext_driver_cmd( void *priv, char *cmd, char *buf, size_t buf_len
 		    (os_strcasecmp(cmd, "GETBAND") == 0)) {
 			ret = strlen(buf);
 		} else if (os_strcasecmp(cmd, "START") == 0) {
-			drv->driver_is_started = true;
+			drv->driver_is_started = TRUE;
 			linux_set_iface_flags(drv->ioctl_sock, drv->ifname, 1);
 			/* os_sleep(0, WPA_DRIVER_WEXT_WAIT_US);
 			wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "STARTED"); */
 		} else if (os_strcasecmp(cmd, "STOP") == 0) {
-			drv->driver_is_started = false;
+			drv->driver_is_started = FALSE;
 			/* wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "STOPPED"); */
 		} else if (os_strncasecmp(cmd, "CSCAN", 5) == 0) {
 			wpa_driver_wext_set_scan_timeout(priv);

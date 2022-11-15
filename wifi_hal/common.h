@@ -54,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "009.004"
+#define WIFI_HAL_VERSION      "009.006"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))
@@ -132,6 +132,41 @@ const uint32_t MARVELL_OUI = 0x005043;
 #define NXP_EVENT_FW_RESET_FAILURE 0x3
 #define NXP_EVENT_FW_RESET_START 0x4
 
+#if defined(NXP_VHAL_PRIV_CMD)
+/////////////////////////////////////////////
+//mlanutl command support via VHAL
+/** IOCTL number */
+#define MLAN_ETH_PRIV       (SIOCDEVPRIVATE + 14)
+
+/** Command buffer max length */
+#define BUFFER_LENGTH       (4 * 1024)
+
+/** NXP private command identifier */
+#define CMD_NXP         "MRVL_CMD"
+
+/** Action field value: get */
+#define ACTION_GET  0
+
+typedef struct android_wifi_priv_cmd {
+    u64 buf;
+    int used_len;
+    int total_len;
+} android_wifi_priv_cmd;
+
+typedef struct _mlan_ds_ch_load {
+    /** action */
+    u8 action;
+    u16 ch_load_param;
+    int16_t noise;
+    u16 rx_quality;
+    u16 duration;
+} mlan_ds_ch_load;
+
+#define MAX_CH_LOAD_DURATION 10
+
+
+///////////////////////////////////////////
+#endif //NXP_VHAL_PRIV_CMD
 /* vendor commands define */
 typedef enum {
     /* don't use 0 as a valid subcommand */
@@ -350,5 +385,8 @@ extern wifi_error wifi_get_wake_reason_stats(wifi_interface_handle iface,
 
 void hexdump(void *bytes, byte len);
 
+#if defined(NXP_VHAL_PRIV_CMD)
+int prepare_buffer(u8 *buffer, char* cmd, u32 num, char *args[]);
+#endif //NXP_VHAL_PRIV_CMD
 #endif
 

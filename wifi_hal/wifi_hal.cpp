@@ -1,4 +1,4 @@
-/*
+/* 
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
  * Portions copyright 2015-2021 NXP
@@ -75,11 +75,19 @@ static int internal_valid_message_handler(nl_msg *msg, void *arg);
 static int wifi_get_multicast_id(wifi_handle handle, const char *name, const char *group);
 static int wifi_add_membership(wifi_handle handle, const char *group);
 static wifi_error wifi_init_interfaces(wifi_handle handle);
+#if defined(NXP_VHAL_PRIV_CMD)
+static int process_ch_load_results(int sockfd, wifi_ch_load *ch_stats);
+#endif //NXP_VHAL_PRIV_CMD
 wifi_error wifi_configure_nd_offload(wifi_interface_handle iface, u8 enable);
 wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_handle iface, s8 max_rssi,
                                            s8 min_rssi, wifi_rssi_event_handler eh);
 wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_handle iface);
 
+
+#if defined(NXP_VHAL_PRIV_CMD)
+/** Device name */
+char    intf_name[IFNAMSIZ + 1];
+#endif //NXP_VHAL_PRIV_CMD
 /**
 * API to set packe filter
 * @param program        pointer to the program byte-code
@@ -221,6 +229,9 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_get_iface_name = wifi_get_iface_name;
     fn->wifi_set_link_stats = wifi_set_link_stats;
     fn->wifi_get_link_stats = wifi_get_link_stats;
+#if defined(NXP_VHAL_PRIV_CMD)
+    fn->wifi_get_ch_load = wifi_get_ch_load;
+#endif
     fn->wifi_clear_link_stats = wifi_clear_link_stats;
     fn->wifi_get_valid_channels = wifi_get_valid_channels;
     fn->wifi_rtt_range_request = wifi_rtt_range_request;
@@ -330,6 +341,7 @@ void interface_up()
 
     ret = ioctl(sockfd, SIOCSIFFLAGS, &ifr);
     ALOGD("Interface UP: ioctl returned = %d",ret);
+    close(sockfd);
 }
 
 int handle_driver_hang_event(struct nl_msg *msg, void *arg)
@@ -379,6 +391,7 @@ int handle_fw_reset_start_event(struct nl_msg *msg, void *arg)
                     ALOGE("fw reload successful, wifi status is enabled.");
                     /*bring interface up*/
                     interface_up();
+                    close(fd);
                     return 0;
                 }
             }
@@ -771,9 +784,9 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
         if (cmd != NULL) {
             pthread_mutex_unlock(&info->cb_lock);
             cmd->cancel();
-            pthread_mutex_lock(&info->cb_lock);
             /* release reference added when command is saved */
             cmd->releaseRef();
+            pthread_mutex_lock(&info->cb_lock);
             if (num_cmd == info->num_cmd) {
                 bad_commands++;
             }
@@ -1785,5 +1798,174 @@ wifi_error wifi_get_valid_channels(wifi_interface_handle handle,
     ret = ValidChannels.requestResponse();
     return (wifi_error) ret;
 }
+
+#if defined(NXP_VHAL_PRIV_CMD)
+wifi_error wifi_get_ch_load(wifi_interface_handle handle, uint16_t duration,
+        wifi_ch_load *ch_stats)
+{
+    struct android_wifi_priv_cmd *cmd = NULL;
+    struct ifreq ifr;
+    mlan_ds_ch_load *cl_cfg = NULL;
+    struct timespec req, rem;
+    char cmd_str[] = "getchload";
+    char *iface;
+    int ret = WIFI_SUCCESS;
+    int sockfd;
+    u8 *buffer = NULL;
+    u8 repeat = 0;
+    int8_t status = WIFI_SUCCESS;
+
+    iface = ((interface_info *)handle)->name;
+    ALOGI("getchload for iface: %s, duration: %d", iface, duration);
+
+    /*
+     * Create a socket
+     */
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd < 0) {
+        ALOGE("getchload: failed to create socket");
+        return WIFI_ERROR_UNKNOWN;
+    }
+
+    strncpy(intf_name, iface, IFNAMSIZ-1);
+
+    /* Initialize buffer */
+    buffer = (u8 *) malloc(BUFFER_LENGTH);
+    if (!buffer) {
+        ALOGE("getchload: ERR:Cannot allocate buffer for command!");
+        return WIFI_ERROR_UNKNOWN;
+    }
+
+    memset(buffer, 0, BUFFER_LENGTH);
+    prepare_buffer(buffer, cmd_str, 0, NULL);
+    cl_cfg = (mlan_ds_ch_load*)(buffer + strlen(CMD_NXP) + strlen(cmd_str));
+    memset(cl_cfg, 0, sizeof(mlan_ds_ch_load));
+    cl_cfg->action = ACTION_GET;
+
+    if (duration > MAX_CH_LOAD_DURATION || duration < 1) {
+        cl_cfg->duration = MAX_CH_LOAD_DURATION;
+    } else {
+        cl_cfg->duration = duration;
+    }
+
+    ALOGD("getchload: action=%d duration: %d\n",cl_cfg->action, cl_cfg->duration);
+
+    /* Send command */
+    cmd = (struct android_wifi_priv_cmd *) malloc(sizeof(struct android_wifi_priv_cmd));
+    if (!cmd) {
+        ALOGE("getchload: ERR:Cannot allocate buffer for priv command!");
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+
+    /* Fill up buffer */
+    memset(cmd, 0, sizeof(struct android_wifi_priv_cmd));
+    memcpy(&cmd->buf, &buffer, sizeof(buffer));
+    cmd->used_len = 0;
+    cmd->total_len = BUFFER_LENGTH;
+
+    /* Perform IOCTL */
+    memset(&ifr, 0, sizeof(struct ifreq));
+    strncpy(ifr.ifr_ifrn.ifrn_name, intf_name, strlen(intf_name));
+    ifr.ifr_ifru.ifru_data = (void *) cmd;
+    if (ioctl(sockfd, MLAN_ETH_PRIV, &ifr)) {
+        ALOGE("getchload: ioctl failed");
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+
+    ALOGV("getchload: ioctl success");
+    do {
+        memset(&req, 0, sizeof(req));
+        memset(&rem, 0, sizeof(rem));
+	status = 0;
+        if (repeat == 0) { /* For the first iteration */
+            req.tv_nsec = cl_cfg->duration * 10 * (long)(1000000); /* converting to ms and then to ns */
+        } else { /* rest iteration to poll */
+            req.tv_nsec = (long)(100000); /* 100us */
+        }
+        nanosleep(&req, &rem);
+        repeat = 1;
+        status = process_ch_load_results(sockfd, ch_stats);
+     } while (status == -EAGAIN);
+
+done:
+    if (cmd)
+        free(cmd);
+    if (buffer)
+        free(buffer);
+    close(sockfd);
+    return (wifi_error)ret;
+}
+
+static int process_ch_load_results(int sockfd, wifi_ch_load *ch_stats)
+{
+    struct android_wifi_priv_cmd *cmd = NULL;
+    struct ifreq ifr;
+    mlan_ds_ch_load *cl_cfg = NULL;
+    char cmd_str[] = "getloadresults";
+    int ret = WIFI_SUCCESS;
+    u8 *buffer = NULL;
+
+    /* Initialize buffer */
+    buffer = (u8 *) malloc(BUFFER_LENGTH);
+    if (!buffer) {
+        ALOGE("process_ch_load_results: ERR:Cannot allocate buffer for command!");
+        return WIFI_ERROR_UNKNOWN;
+    }
+
+    memset(buffer, 0, BUFFER_LENGTH);
+    prepare_buffer(buffer, cmd_str, 0, NULL);
+    cl_cfg = (mlan_ds_ch_load*)(buffer + strlen(CMD_NXP) + strlen(cmd_str));
+    memset(cl_cfg, 0, sizeof(mlan_ds_ch_load));
+    cl_cfg->action = ACTION_GET;
+
+    /* Send command */
+    cmd = (struct android_wifi_priv_cmd *) malloc(sizeof(struct android_wifi_priv_cmd));
+    if (!cmd) {
+        ALOGE("process_ch_load_results: ERR:Cannot allocate buffer for priv command!");
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+
+    /* Fill up buffer */
+    memset(cmd, 0, sizeof(struct android_wifi_priv_cmd));
+    memcpy(&cmd->buf, &buffer, sizeof(buffer));
+    cmd->used_len = 0;
+    cmd->total_len = BUFFER_LENGTH;
+
+    /* Perform IOCTL */
+    memset(&ifr, 0, sizeof(struct ifreq));
+    strncpy(ifr.ifr_ifrn.ifrn_name, intf_name, strlen(intf_name));
+    ifr.ifr_ifru.ifru_data = (void *) cmd;
+
+    if (ioctl(sockfd, MLAN_ETH_PRIV, &ifr)) {
+        if (errno == EAGAIN) {
+            ret = -EAGAIN;
+        } else {
+            ALOGE("process_ch_load_result: getloadresults ioctl failed");
+            ret = WIFI_ERROR_UNKNOWN;
+        }
+        if (cmd)
+            free(cmd);
+        if (buffer)
+            free(buffer);
+        return ret;
+    }
+    ALOGI("getchload: process_ch_load_result: Channel Info: ch_load=%d, noise=%d rx_quality=%d",
+	  cl_cfg->ch_load_param, cl_cfg->noise, cl_cfg->rx_quality);
+    ch_stats->ch_load = cl_cfg->ch_load_param;
+    ch_stats->noise = cl_cfg->noise;
+    ch_stats->rx_quality = cl_cfg->rx_quality;
+
+ done:
+    if (cmd)
+        free(cmd);
+    if (buffer)
+        free(buffer);
+
+    return ret;
+}
+#endif //NXP_VHAL_PRIV_CMD
 
 /////////////////////////////////////////////////////////////////////////////

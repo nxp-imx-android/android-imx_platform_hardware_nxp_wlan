@@ -155,6 +155,9 @@ public:
         mCompleted = 0;
         totalCnt = 0;
         numConfig = 0;
+        rttConfig = NULL;
+        memset(rttResults, 0, sizeof(wifi_rtt_result*) * MAX_RESULTS);
+        Handler.on_rtt_results = NULL;
     }
 
     int createSetupRequest(WifiRequest& request) {
@@ -611,6 +614,7 @@ public:
     : WifiCommand("RttSetCommand", iface, id)
     {
         LCI = lci;
+        LCR = NULL;
         Config = cmdType;
     }
 
@@ -618,6 +622,7 @@ public:
                          wifi_lcr_information *lcr, ConfigureType cmdType)
     : WifiCommand("RttSetCommand", iface, id)
     {
+        LCI = NULL;
         LCR = lcr;
         Config = cmdType;
     }
