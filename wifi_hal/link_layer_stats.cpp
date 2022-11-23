@@ -189,13 +189,8 @@ public:
 		iface_stat->rssi_ack = iface_stat_nxp->rssi_ack;
 		memcpy((u8 *)iface_stat->ac, iface_stat_nxp->ac,sizeof(wifi_wmm_ac_stat)*WIFI_AC_MAX);
 		iface_stat->num_peers = iface_stat_nxp->num_peers;
-		for (i=0; i<iface_stat->num_peers; i++){
-			memcpy((u8 *)&iface_stat->peer_info[i],(u8 *)&iface_stat_nxp->peer_info[i],sizeof(wifi_peer_info));
-			memcpy((u8 *)iface_stat->peer_info[i].rate_stats,
-			       (u8 *)iface_stat_nxp->peer_info[i].rate_stats,
-			       sizeof(wifi_rate_stat)*iface_stat_nxp->peer_info[i].num_rate);
-		}
 
+		memcpy(&iface_stat->peer_info, &iface_stat_nxp->peer_info, iface_len - sizeof(wifi_iface_stat_nxp));
         /** Process Num of RADIO */
         if(!tb_vendor[NXP_ATTR_LL_STATS_NUM_RADIOS]){
             ALOGE("NXP_ATTR_LL_STATS_NUM_RADIOS not found\n");
