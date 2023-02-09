@@ -25,6 +25,7 @@
 #include <netpacket/packet.h>
 #include <linux/filter.h>
 #include <linux/errqueue.h>
+#include <cutils/properties.h>
 #include <errno.h>
 
 #include <linux/pkt_sched.h>
@@ -69,6 +70,8 @@
 #define POLL_FW_RESET_STATUS_TIME_MS (3000)  /*3s*/
 
 
+#define PROP_VENDOR_TRIGGER_PDN "vendor.nxp.trigger_pdn"
+
 static void internal_event_handler(wifi_handle handle, int events);
 static int internal_no_seq_check(nl_msg *msg, void *arg);
 static int internal_valid_message_handler(nl_msg *msg, void *arg);
@@ -77,6 +80,7 @@ static int wifi_add_membership(wifi_handle handle, const char *group);
 static wifi_error wifi_init_interfaces(wifi_handle handle);
 #if defined(NXP_VHAL_PRIV_CMD)
 static int process_ch_load_results(int sockfd, wifi_ch_load *ch_stats);
+static int uap_ioctl(u8 * cmd, u16 * size, u16 buf_size);
 #endif //NXP_VHAL_PRIV_CMD
 wifi_error wifi_configure_nd_offload(wifi_interface_handle iface, u8 enable);
 wifi_error wifi_start_rssi_monitoring(wifi_request_id id, wifi_interface_handle iface, s8 max_rssi,
@@ -87,6 +91,7 @@ wifi_error wifi_stop_rssi_monitoring(wifi_request_id id, wifi_interface_handle i
 #if defined(NXP_VHAL_PRIV_CMD)
 /** Device name */
 char    intf_name[IFNAMSIZ + 1];
+char    uap_intf_name[IFNAMSIZ + 1];
 #endif //NXP_VHAL_PRIV_CMD
 /**
 * API to set packe filter
@@ -231,6 +236,8 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_get_link_stats = wifi_get_link_stats;
 #if defined(NXP_VHAL_PRIV_CMD)
     fn->wifi_get_ch_load = wifi_get_ch_load;
+    fn->wifi_set_wacp_mode = wifi_set_wacp_mode;
+    fn->wifi_get_wacp_mode = wifi_get_wacp_mode;
 #endif
     fn->wifi_clear_link_stats = wifi_clear_link_stats;
     fn->wifi_get_valid_channels = wifi_get_valid_channels;
@@ -291,6 +298,29 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_stop_sending_offloaded_packet = wifi_stop_sending_offloaded_packet;
     ALOGV("***over init_wifi_vendor_hal_func_table***");
     return WIFI_SUCCESS;
+}
+
+static int set_prop_int32(const char* name, int value) {
+  char init_value[PROPERTY_VALUE_MAX];
+  int ret;
+
+  sprintf(init_value, "%d", value);
+  ret = property_set(name, init_value);
+  if (ret < 0) {
+    ALOGE("set_prop_int32 failed: %d", ret);
+  }
+  return ret;
+}
+
+static int get_prop_int32(const char* name) {
+  int ret;
+
+  ret = property_get_int32(name, -1);
+  ALOGV("get_prop_int32: %d", ret);
+  if (ret < 0) {
+    return 0;
+  }
+  return ret;
 }
 
 #if (SUPPORT_INBAND_IR == true)
@@ -689,6 +719,8 @@ wifi_error wifi_initialize(wifi_handle *handle)
 
     ALOGD("Initialized Wifi HAL Successfully; vendor cmd = %d", NL80211_CMD_VENDOR);
     ALOGD("Wifi HAL version : %s",WIFI_HAL_VERSION);
+    ALOGD("Resetting %s property", PROP_VENDOR_TRIGGER_PDN);
+    set_prop_int32(PROP_VENDOR_TRIGGER_PDN, 0);
 exit:
     if (ret != WIFI_SUCCESS) {
         if (event_sock)
@@ -819,6 +851,11 @@ void wifi_cleanup(wifi_handle handle, wifi_cleaned_up_handler handler)
         ALOGE("could not write to cleanup socket");
     } else {
         ALOGV("Wifi cleanup completed\n");
+    }
+    if (get_prop_int32(PROP_VENDOR_TRIGGER_PDN)) {
+        wifi_wait_for_driver_ready();
+        LOG_ALWAYS_FATAL("%s is set. Triggering WiFi service restart..",
+                         PROP_VENDOR_TRIGGER_PDN);
     }
 }
 
@@ -1966,6 +2003,246 @@ static int process_ch_load_results(int sockfd, wifi_ch_load *ch_stats)
 
     return ret;
 }
+
+wifi_error wifi_set_wacp_mode(wifi_interface_handle handle, uint8_t mode)
+{
+    apcmdbuf_sys_configure *cmd_buf = NULL;
+    tlvbuf_wacp_mode *tlv = NULL;
+    u8 *buffer = NULL;
+    char *iface;
+    u16 cmd_len = 0;
+    u16 buf_len = BUFFER_LENGTH;
+    int ret = WIFI_SUCCESS;
+
+    iface = ((interface_info *)handle)->name;
+    ALOGI("set wacp_mode for iface: %s to : %d", iface, mode);
+    strncpy(uap_intf_name, iface, IFNAMSIZ-1);
+
+    /* Initialize the command length */
+    cmd_len = sizeof(apcmdbuf_sys_configure) + sizeof(tlvbuf_wacp_mode);
+
+    /* Initialize the command buffer */
+    buffer = (u8 *) malloc(buf_len);
+    if (!buffer) {
+        ALOGE("wifi_set_wacp_mode: ERR:Cannot allocate buffer for command!\n");
+        return WIFI_ERROR_UNKNOWN;
+    }
+    memset(buffer, 0, buf_len);
+
+    /* Locate headers */
+    cmd_buf = (apcmdbuf_sys_configure *) buffer;
+    tlv = (tlvbuf_wacp_mode*) (buffer + sizeof(apcmdbuf_sys_configure));
+
+    /* Fill the command buffer */
+    cmd_buf->cmd_code = APCMD_SYS_CONFIGURE;
+    cmd_buf->size = cmd_len;
+    cmd_buf->seq_num = 0;
+    cmd_buf->result = 0;
+    tlv->tag = MRVL_AP_WACP_MODE_TLV_ID;
+    tlv->length = 1;
+    cmd_buf->action = ACTION_SET;
+    tlv->wacp_mode = mode;
+
+    /* Send the command */
+    ret = uap_ioctl((u8 *) cmd_buf, &cmd_len, buf_len);
+
+    /* Process response */
+    if (ret == UAP_SUCCESS) {
+        /* Verify response */
+        if ((cmd_buf->cmd_code != (APCMD_SYS_CONFIGURE | APCMD_RESP_CHECK)) ||
+            (tlv->tag != MRVL_AP_WACP_MODE_TLV_ID)) {
+            ALOGE("wifi_set_wacp_mode: ERR:Corrupted response! cmd_code=%x, Tlv->tag=%x",
+                   cmd_buf->cmd_code, tlv->tag);
+            free(buffer);
+            return WIFI_ERROR_UNKNOWN;
+        }
+
+       /* Print response */
+        if (cmd_buf->result == CMD_SUCCESS) {
+            ALOGI("wifi_set_wacp_mode: WACP Mode setting successful");
+            ret = WIFI_SUCCESS;
+        } else {
+            ALOGE("wifi_set_wacp_mode: ERR:Could not set WACP Mode !");
+            ret = WIFI_ERROR_UNKNOWN;
+        }
+    } else {
+        ALOGE("wifi_set_wacp_mode: ERR:Command sending failed!");
+        ret = WIFI_ERROR_UNKNOWN;
+    }
+
+    if (buffer)
+        free(buffer);
+    return (wifi_error)ret;
+}
+
+wifi_error wifi_get_wacp_mode(wifi_interface_handle handle, uint8_t *mode)
+{
+    apcmdbuf_sys_configure *cmd_buf = NULL;
+    tlvbuf_wacp_mode *tlv = NULL;
+    u8 *buffer = NULL;
+    char *iface;
+    u16 cmd_len = 0;
+    u16 buf_len = BUFFER_LENGTH;
+    int ret = WIFI_SUCCESS;
+
+    iface = ((interface_info *)handle)->name;
+    ALOGI("get wacp_mode for iface: %s", iface);
+    strncpy(uap_intf_name, iface, IFNAMSIZ-1);
+
+    /* Initialize the command length */
+    cmd_len = sizeof(apcmdbuf_sys_configure) + sizeof(tlvbuf_wacp_mode);
+
+    /* Initialize the command buffer */
+    buffer = (u8 *) malloc(buf_len);
+    if (!buffer) {
+        ALOGE("wifi_get_wacp_mode: ERR:Cannot allocate buffer for command!\n");
+        return WIFI_ERROR_UNKNOWN;
+    }
+    memset(buffer, 0, buf_len);
+
+    /* Locate headers */
+    cmd_buf = (apcmdbuf_sys_configure *) buffer;
+    tlv = (tlvbuf_wacp_mode*) (buffer + sizeof(apcmdbuf_sys_configure));
+
+    /* Fill the command buffer */
+    cmd_buf->cmd_code = APCMD_SYS_CONFIGURE;
+    cmd_buf->size = cmd_len;
+    cmd_buf->seq_num = 0;
+    cmd_buf->result = 0;
+    tlv->tag = MRVL_AP_WACP_MODE_TLV_ID;
+    tlv->length = 1;
+    cmd_buf->action = ACTION_GET;
+
+    /* Send the command */
+    ret = uap_ioctl((u8 *) cmd_buf, &cmd_len, buf_len);
+
+    /* Process response */
+    if (ret == UAP_SUCCESS) {
+        /* Verify response */
+        if ((cmd_buf->cmd_code != (APCMD_SYS_CONFIGURE | APCMD_RESP_CHECK)) ||
+            (tlv->tag != MRVL_AP_WACP_MODE_TLV_ID)) {
+            ALOGE("wifi_get_wacp_mode: ERR:Corrupted response! cmd_code=%x, Tlv->tag=%x",
+                   cmd_buf->cmd_code, tlv->tag);
+            free(buffer);
+            return WIFI_ERROR_UNKNOWN;
+        }
+
+       /* Print response */
+        if (cmd_buf->result == CMD_SUCCESS) {
+            ALOGI("wifi_get_wacp_mode: WACP Mode %s(0x%x)",
+                   (tlv->wacp_mode) ? "Enabled" : "Disabled", tlv->wacp_mode);
+            *mode = tlv->wacp_mode;
+            ret = WIFI_SUCCESS;
+        } else {
+            ALOGE("wifi_get_wacp_mode: ERR:Could not get WACP Mode !");
+            ret = WIFI_ERROR_UNKNOWN;
+        }
+    } else {
+        ALOGE("wifi_get_wacp_mode: ERR:Command sending failed!");
+        ret = WIFI_ERROR_UNKNOWN;
+    }
+
+    if (buffer)
+        free(buffer);
+    return (wifi_error)ret;
+}
+
+/**
+ *  @brief Performs the uap ioctl operation to send the command to
+ *  the driver.
+ *
+ *  @param cmd           Pointer to the command buffer
+ *  @param size          Pointer to the command size. This value is
+ *                       overwritten by the function with the size of the
+ *                       received response.
+ *  @param buf_size      Size of the allocated command buffer
+ *  @return              UAP_SUCCESS or UAP_FAILURE
+ */
+static int uap_ioctl(u8 * cmd, u16 * size, u16 buf_size)
+{
+    struct ifreq ifr;
+    apcmdbuf *header = NULL;
+    int sockfd;
+    mrvl_priv_cmd * mrvl_cmd = NULL;
+    u8 *buf = NULL, *temp = NULL;
+    u16 mrvl_header_len = 0;
+    int ret = UAP_SUCCESS;
+
+    if (buf_size < *size) {
+        ALOGE("uap_ioctl: buf_size should not less than cmd buffer size\n");
+        return UAP_FAILURE;
+    }
+
+    /* Open socket */
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        printf("ERR:Cannot open socket\n");
+        return UAP_FAILURE;
+    }
+    *(u32 *) cmd = buf_size - BUF_HEADER_SIZE;
+
+    mrvl_header_len = strlen(CMD_NXP) + strlen(PRIV_CMD_HOSTCMD);
+    buf = (unsigned char *) malloc(buf_size + sizeof(mrvl_priv_cmd) + mrvl_header_len);
+    if (buf == NULL){
+         close(sockfd);
+         return UAP_FAILURE;
+    }
+
+    memset(buf, 0, buf_size + sizeof(mrvl_priv_cmd) + mrvl_header_len);
+    /* Fill up buffer */
+    mrvl_cmd = (mrvl_priv_cmd *)buf;
+    mrvl_cmd->buf = buf + sizeof(mrvl_priv_cmd);
+    mrvl_cmd->used_len = 0;
+    mrvl_cmd->total_len = buf_size + mrvl_header_len;
+    /* Copy NXP command string */
+    temp = mrvl_cmd->buf;
+    memcpy((char *)temp, CMD_NXP, strlen(CMD_NXP));
+    temp += (strlen(CMD_NXP));
+    /* Insert command string*/
+    memcpy((char *)temp, PRIV_CMD_HOSTCMD, strlen(PRIV_CMD_HOSTCMD));
+    temp += (strlen(PRIV_CMD_HOSTCMD));
+
+    memcpy(temp, (u8 *)cmd, *size);
+
+    /* Initialize the ifr structure */
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_ifrn.ifrn_name, uap_intf_name, IFNAMSIZ -1);
+    ifr.ifr_ifru.ifru_data = (void *) mrvl_cmd;
+    header = (apcmdbuf *) (buf + sizeof(mrvl_priv_cmd) + mrvl_header_len);
+    header->size = *size - BUF_HEADER_SIZE;
+    if (header->cmd_code == APCMD_SYS_CONFIGURE) {
+        apcmdbuf_sys_configure *sys_cfg;
+        sys_cfg = (apcmdbuf_sys_configure *) header;
+        sys_cfg->action = sys_cfg->action;
+    }
+
+    /* Perform ioctl */
+    if (ioctl(sockfd, MLAN_ETH_PRIV, &ifr)) {
+        ALOGE("uap_ioctl: ioctl failed for interface: %s", uap_intf_name);
+        ret = UAP_FAILURE;
+        goto done;
+    }
+    header->cmd_code &= HostCmd_CMD_ID_MASK;
+    header->cmd_code |= APCMD_RESP_CHECK;
+    *size = header->size;
+
+    /* Validate response size */
+    if (*size > (buf_size - BUF_HEADER_SIZE)) {
+        ALOGE("uap_ioctl: ERR:Response size (%d) greater than buffer size (%d)! Aborting!\n",
+             *size, buf_size);
+        ret = UAP_FAILURE;
+        goto done;
+    }
+    memcpy(cmd, (u8 *)header, *size + BUF_HEADER_SIZE);
+
+done:
+    /* Close socket */
+    close(sockfd);
+    if (buf)
+        free(buf);
+    return ret;
+
+}
+
 #endif //NXP_VHAL_PRIV_CMD
 
 /////////////////////////////////////////////////////////////////////////////

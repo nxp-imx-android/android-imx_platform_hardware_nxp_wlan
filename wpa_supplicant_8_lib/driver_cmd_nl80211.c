@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2017 The Android Open Source Project
  * Portions copyright (C) 2017 Broadcom Limited
- * Portions copyright 2015-2021 NXP
+ * Portions copyright 2015-2023 NXP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,7 +240,9 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
     } else if (os_strcasecmp(cmd, "START") == 0) {
         linux_set_iface_flags(drv->global->ioctl_sock, bss->ifname, 1);
         wpa_msg(drv->ctx, MSG_INFO, WPA_EVENT_DRIVER_STATE "STARTED");
-    } else if(os_strncasecmp(cmd, "COUNTRY", strlen("COUNTRY")) == 0 && ((strlen(cmd) - strlen("COUNTRY") - 1) >= 2)) {
+    } else if(os_strncasecmp(cmd, "COUNTRY", strlen("COUNTRY")) == 0
+		    && ((strlen(cmd) - strlen("COUNTRY") - 1) >= 2)
+		    && (os_strcasecmp(cmd, "COUNTRYCODE") != 0)) {
         char alpha2[3];
     struct nl_msg *msg;
 
@@ -248,14 +250,19 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
     if (!msg)
         return -ENOMEM;
 
-    memcpy(alpha2, cmd + strlen("COUNTRY") + 1, strlen(cmd) - strlen("COUNTRY") - 1);
+    alpha2[0] = cmd[strlen("COUNTRY") + 1];
+    alpha2[1] = cmd[strlen("COUNTRY") + 2];
     alpha2[2] = '\0';
     if (!nl80211_cmd(drv, msg, 0, NL80211_CMD_REQ_SET_REG) ||
     nla_put_string(msg, NL80211_ATTR_REG_ALPHA2, alpha2)) {
         nlmsg_free(msg);
         return -EINVAL;
     }
+#ifdef ANDROID_12
     if (send_and_recv_msgs(drv, msg, NULL, NULL, NULL, NULL))
+#else
+    if (send_and_recv_msgs(drv, msg, NULL, NULL))
+#endif
         return -EINVAL;
     } else if (os_strcasecmp(cmd, "MACADDR") == 0) {
         u8 macaddr[ETH_ALEN] = {};
@@ -307,6 +314,7 @@ int wpa_driver_nl80211_driver_cmd(void *priv, char *cmd, char *buf,
             if ((os_strcasecmp(cmd, "LINKSPEED") == 0) ||
                 (os_strcasecmp(cmd, "RSSI") == 0) ||
                 (os_strcasecmp(cmd, "GETBAND") == 0) ||
+                (os_strcasecmp(cmd, "COUNTRYCODE") == 0) ||
                 (os_strncasecmp(cmd, "WLS_BATCHING", 12) == 0))
                 ret = strlen(buf);
             else if ((os_strncasecmp(cmd, "COUNTRY", 7) == 0) ||

@@ -54,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "009.006"
+#define WIFI_HAL_VERSION      "009.009"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))
@@ -146,6 +146,8 @@ const uint32_t MARVELL_OUI = 0x005043;
 
 /** Action field value: get */
 #define ACTION_GET  0
+/** Action field value: set */
+#define ACTION_SET  1
 
 typedef struct android_wifi_priv_cmd {
     u64 buf;
@@ -164,6 +166,91 @@ typedef struct _mlan_ds_ch_load {
 
 #define MAX_CH_LOAD_DURATION 10
 
+//uaputl command support via VHAL
+
+/** NXP private command for hostcmd */
+#define PRIV_CMD_HOSTCMD    "hostcmd"
+
+/** 4 byte header to store buf len*/
+#define BUF_HEADER_SIZE     4
+
+/** APCMD : sys_configure */
+#define APCMD_SYS_CONFIGURE         0x00b0
+
+/* TLV IDs */
+/** TLV : Base */
+#define PROPRIETARY_TLV_BASE_ID         0x0100
+#define MRVL_AP_WACP_MODE_TLV_ID        (PROPRIETARY_TLV_BASE_ID + 0x147)
+
+/** Host Command ID bit mask (bit 11:0) */
+#define HostCmd_CMD_ID_MASK             0x0fff
+/** APCMD response check */
+#define APCMD_RESP_CHECK            0x8000
+
+/** Success */
+#define UAP_SUCCESS     1
+/** Failure */
+#define UAP_FAILURE     0
+
+/** AP CMD header */
+#define APCMDHEADER     /** Buf Size */         \
+                        u32 buf_size;         \
+                        /** Command Code */     \
+                        u16 cmd_code;         \
+                        /** Size */             \
+                        u16 size;             \
+                        /** Sequence Number */  \
+                        u16 seq_num;          \
+                        /** Result */           \
+                        int16_t result
+
+/** TLV header */
+#define TLVHEADER       /** Tag */      \
+                        u16 tag;      \
+                        /** Length */   \
+                        u16 length
+
+/** Command is successful */
+#define CMD_SUCCESS     0
+/** Command fails */
+#define CMD_FAILURE     -1
+
+/** MRVL private CMD structure */
+typedef struct _mrvl_priv_cmd
+{
+   /** Command buffer */
+    u8 *buf;
+    /** Used length */
+    u32 used_len;
+    /** Total length */
+    u32 total_len;
+} __attribute__ ((packed)) mrvl_priv_cmd;
+
+/* APCMD definitions */
+/** APCMD buffer */
+typedef struct _apcmdbuf
+{
+    /** Header */
+    APCMDHEADER;
+} __attribute__ ((packed)) apcmdbuf;
+
+/** APCMD buffer : sys_configure */
+typedef struct _apcmdbuf_sys_configure
+{
+    /** Header */
+    APCMDHEADER;
+    /** Action : GET or SET */
+    u16 action;
+} __attribute__ ((packed)) apcmdbuf_sys_configure;
+
+/** TLV buffer : WACP Mode*/
+typedef struct _tlvbuf_wacp_mode_
+{
+    /** Header */
+    TLVHEADER;
+    /** WACP mode*/
+    u8 wacp_mode;
+} __attribute__ ((packed)) tlvbuf_wacp_mode;
 
 ///////////////////////////////////////////
 #endif //NXP_VHAL_PRIV_CMD
