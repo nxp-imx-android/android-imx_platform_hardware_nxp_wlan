@@ -4,6 +4,33 @@ HAL code can support Android Q,R.
 
 ChangeLog
 
+2023-Mar-3 - v009.010
+
+  *Fixes added for legacy HAL (android 8. 9) crash
+
+2023-16-2 - v009.009
+
+  *Support for PCIE Inband Reset
+    - Add support for PCIE IR.
+      VHAL will trigger SDIO/PCIE IR based on NXP_EVENT_DRIVER_HANG received
+      from driver. NXP_EVENT_DRIVER_HANG is modified  to send fw_reload mode
+      (SDIO-IR/PCIE-IR/PCIE-FLR). Based on mode received from driver,
+      vhal triggers fw_reload.
+      SUPPORT_INBAND_IR is changed to SUPPORT_FW_RELOAD
+      [By Default SUPPORT_FW_RELOAD is enabled in VHAL common.h file.
+       To disable, define it to false]
+      Tested on PCIE9098.
+
+2022-2-12 - v009.008
+
+  *Support for wacp_mode command
+    - Add VHAL support to get/set wacp_mode.
+      Same as getchload, the feature is disabled by default to
+      avoid the compilation error with the products that does not
+      support this feature.
+      Same can be enabled by using NXP_VHAL_PRIV_CMD flag in
+      device specific path.
+
 2022-3-11 - v009.006
 
   *Support for getchload command

@@ -22,7 +22,7 @@
 #define __WIFI_HAL_COMMON_H__
 
 #define LOG_TAG  "WifiHAL"
-#define SUPPORT_INBAND_IR true
+#define SUPPORT_FW_RELOAD true
 
 #include <pthread.h>
 #include "nl80211_copy.h"
@@ -54,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "009.009"
+#define WIFI_HAL_VERSION      "009.010"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))

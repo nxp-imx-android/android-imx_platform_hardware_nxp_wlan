@@ -165,6 +165,24 @@ enum wifi_attr_packet_filter
     NXP_ATTR_PACKET_FILTER_MAX,
 };
 
+#if (SUPPORT_FW_RELOAD == true)
+
+/** sdio inband reset */
+#define FW_RELOAD_SDIO_INBAND_RESET 1
+/** pcie card reset */
+#define FW_RELOAD_PCIE_RESET 4
+/** pcie inband reset */
+#define FW_RELOAD_PCIE_INBAND_RESET 6
+
+enum wifi_attr_fw_reload
+{
+    NXP_ATTR_FW_RELOAD_INVALID = 0,
+    NXP_ATTR_FW_RELOAD_MODE = 1,
+    NXP_ATTR_FW_RELOAD_AFTER_LAST,
+    NXP_ATTR_FW_RELOAD_MAX = NXP_ATTR_FW_RELOAD_AFTER_LAST - 1,
+};
+#endif
+
 /* Initialize/Cleanup */
 
 wifi_interface_handle wifi_get_iface_handle(wifi_handle handle, char *name)
@@ -323,38 +341,42 @@ static int get_prop_int32(const char* name) {
   return ret;
 }
 
-#if (SUPPORT_INBAND_IR == true)
-/* proc fs node for Wifi in-band reset */
-#define VENDOR_INBAND_IR_PROC_NODE "/proc/mwlan/adapter0/config"
+#if (SUPPORT_FW_RELOAD == true)
+/* proc fs node for Wifi fw_reload */
+#define VENDOR_FW_RELOAD_PROC_NODE "/proc/mwlan/adapter0/config"
 
-int wifi_vnd_write_inband_IR_proc() {
+int wifi_vnd_write_fw_reload_proc(uint8_t mode) {
 
     int fd;
-    char buffer[] = "fw_reload=1";
+    char buffer[20] = {0};
 
-    fd = open(VENDOR_INBAND_IR_PROC_NODE, O_WRONLY);
+    ALOGI("wifi_vnd_write_fw_reload_proc: fw_reload mode is %d", mode);
+    snprintf(buffer, sizeof(buffer), "fw_reload=%d", mode);
+
+    fd = open(VENDOR_FW_RELOAD_PROC_NODE, O_WRONLY);
     if (fd < 0)
     {
-        ALOGE("wifi_vnd_write_inband_IR_proc : open(%s) for write failed: %s (%d)",
-            VENDOR_INBAND_IR_PROC_NODE, strerror(errno), errno);
+        ALOGE("wifi_vnd_write_fw_reload_proc: open(%s) for write failed: %s (%d)",
+            VENDOR_FW_RELOAD_PROC_NODE, strerror(errno), errno);
         return -1;
     }
 
         if (write(fd, buffer, strlen(buffer)) < 0)
             {
-                ALOGE("wifi_vnd_write_inband_IR_proc : write(%s) failed: %s (%d)",
-                        VENDOR_INBAND_IR_PROC_NODE, strerror(errno),errno);
+                ALOGE("wifi_vnd_write_fw_reload_proc: write %s to %s failed: %s (%d)",
+                        buffer, VENDOR_FW_RELOAD_PROC_NODE, strerror(errno),errno);
             }
             else
             {
-                ALOGE("wifi_vnd_write_inband_IR_proc : write %s to %s\n", buffer, VENDOR_INBAND_IR_PROC_NODE);
+                ALOGE("wifi_vnd_write_fw_reload_proc: write %s to %s\n",
+			buffer, VENDOR_FW_RELOAD_PROC_NODE);
             }
 
     if (fd >= 0)
         close(fd);
     return 0;
 }
-#endif //SUPPORT_INBAND_IR
+#endif //SUPPORT_FW_RELOAD
 
 /*Function to force interface up on IR*/
 void interface_up()
@@ -376,12 +398,43 @@ void interface_up()
 
 int handle_driver_hang_event(struct nl_msg *msg, void *arg)
 {
-    ALOGE("Wifi driver hang event received\n");
+/*Trigger inband independant reset/FLR for firmware reload*/
+#if (SUPPORT_FW_RELOAD == true)
+    WifiEvent event(msg);
 
-/*Trigger inband independant reset for firmware reload*/
-#if (SUPPORT_INBAND_IR == true)
-    wifi_vnd_write_inband_IR_proc();
+    int res = event.parse();
+    if (res < 0) {
+        ALOGE("handle_driver_hang_event: Failed to parse event: %d", res);
+        return NL_SKIP;
+    }
+
+    nlattr *vendor_data =(nlattr *) (event.get_data(NL80211_ATTR_VENDOR_DATA));
+    int len = event.get_vendor_data_len();
+    struct nlattr *nl_attr = NULL;
+    uint8_t mode;
+    struct nlattr *tb_vendor[NXP_ATTR_FW_RELOAD_MAX + 1];
+
+    ALOGE("handle_driver_hang_event: Wifi driver hang event received\n");
+
+    if (vendor_data == NULL || len == 0) {
+        ALOGE("handle_driver_hang_event: driver hang: No data");
+        return NL_SKIP;
+    }
+    nla_parse(tb_vendor, NXP_ATTR_FW_RELOAD_MAX, vendor_data, len, NULL);
+
+    if (!tb_vendor[NXP_ATTR_FW_RELOAD_MODE]) {
+        ALOGE("handle_driver_hang_event: NXP_ATTR_FW_RELOAD_MODE not found, "
+               "use default mode as SDIO-IR");
+	//For backward compatibility with old driver, use default mode as SDIO-IR
+        mode = FW_RELOAD_SDIO_INBAND_RESET;
+    } else {
+        mode = *(u8 *)nla_data(tb_vendor[NXP_ATTR_FW_RELOAD_MODE]);
+    }
+
+    ALOGI("handle_driver_hang_event: mode: %d", mode);
+    wifi_vnd_write_fw_reload_proc(mode);
     interface_up();
+    return NL_OK;
 #endif
 
     return 0;

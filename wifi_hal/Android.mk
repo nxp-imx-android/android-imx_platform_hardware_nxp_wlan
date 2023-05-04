@@ -28,6 +28,19 @@ LOCAL_CPPFLAGS += -Wno-conversion-null
 LOCAL_CFLAGS += -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 LOCAL_CPPFLAGS += -DPLATFORM_SDK_VERSION=$(PLATFORM_SDK_VERSION)
 
+# ANDROID major version check
+MAJOR_VERSION :=$(shell echo $(PLATFORM_VERSION) | cut -f1 -d.)
+
+ifneq (,$(findstring $(MAJOR_VERSION), 9))
+$(info *****define ANDROID_9 ****)
+LOCAL_CFLAGS += -DANDROID_9
+endif
+
+ifneq (,$(findstring $(MAJOR_VERSION), 8))
+$(info *****define ANDROID_8 ****)
+LOCAL_CFLAGS += -DANDROID_8
+endif
+
 ifdef NXP_VHAL_PRIV_CMD
 LOCAL_CPPFLAGS += -DNXP_VHAL_PRIV_CMD
 endif
@@ -46,6 +59,7 @@ LOCAL_C_INCLUDES += \
 	$(call include-path-for, libhardware_legacy)/hardware_legacy \
 	external/wpa_supplicant_8/src/drivers \
 	$(TARGET_OUT_HEADERS)/libwpa_client \
+	$(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ/usr/include
 
 LOCAL_SRC_FILES := \
 	wifi_hal.cpp \
