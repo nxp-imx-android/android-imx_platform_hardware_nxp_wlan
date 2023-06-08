@@ -233,8 +233,10 @@ public:
             radio_stat_tmp->radio = radio_stat_nxp_tmp->radio;
             radio_stat_tmp->on_time = radio_stat_nxp_tmp->on_time;
             radio_stat_tmp->tx_time = radio_stat_nxp_tmp->tx_time;
+#if !defined(ANDROID_6)
             radio_stat_tmp->num_tx_levels = radio_stat_nxp_tmp->num_tx_levels;
             radio_stat_tmp->tx_time_per_levels = NULL;
+#endif
             radio_stat_tmp->rx_time = radio_stat_nxp_tmp->rx_time;
             radio_stat_tmp->on_time_scan = radio_stat_nxp_tmp->on_time_scan;
             radio_stat_tmp->on_time_nbd = radio_stat_nxp_tmp->on_time_nbd;
@@ -244,7 +246,7 @@ public:
             radio_stat_tmp->on_time_hs20 = radio_stat_nxp_tmp->on_time_hs20;
             radio_stat_tmp->num_channels = radio_stat_nxp_tmp->num_channels;
 //copy the channel stats for Android version greater than Android-9
-#if !defined(ANDROID_8) && !defined(ANDROID_9)
+#if !defined(ANDROID_6) && !defined(ANDROID_7) && !defined(ANDROID_8) && !defined(ANDROID_9)
             memcpy(radio_stat_tmp->channels, radio_stat_nxp_tmp->channels, radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
             radio_stat_tmp = (wifi_radio_stat *)((u8 *)radio_stat_tmp + sizeof(wifi_radio_stat) + radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
             radio_stat_nxp_tmp = (wifi_radio_stat_nxp *)((u8 *)radio_stat_nxp_tmp +sizeof(wifi_radio_stat_nxp) + radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));

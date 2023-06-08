@@ -41,6 +41,16 @@ $(info *****define ANDROID_8 ****)
 LOCAL_CFLAGS += -DANDROID_8
 endif
 
+ifneq (,$(findstring $(MAJOR_VERSION), 7))
+$(info *****define ANDROID_7 ****)
+LOCAL_CFLAGS += -DANDROID_7
+endif
+
+ifneq (,$(findstring $(MAJOR_VERSION), 6))
+$(info *****define ANDROID_6 ****)
+LOCAL_CFLAGS += -DANDROID_6
+endif
+
 ifdef NXP_VHAL_PRIV_CMD
 LOCAL_CPPFLAGS += -DNXP_VHAL_PRIV_CMD
 endif
