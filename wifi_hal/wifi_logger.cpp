@@ -172,14 +172,14 @@ public:
         struct nlattr *tb_vendor[NXP_ATTR_WIFI_LOGGER_MAX];
         int status = WIFI_ERROR_NONE;
         nla_parse(tb_vendor, (NXP_ATTR_WIFI_LOGGER_MAX-1),tb, len, NULL);
-        if (bufferSize < len)
-           return NL_SKIP;
-        bufferSize = len;
         if (!tb_vendor[NXP_ATTR_LOGGER_NAME]){
             ALOGE("NXP_ATTR_NAME not found");
             status = WIFI_ERROR_INVALID_ARGS;
             return status;
         }
+        if (bufferSize < nla_len(tb_vendor[NXP_ATTR_LOGGER_NAME]))
+           return NL_SKIP;
+        bufferSize = nla_len(tb_vendor[NXP_ATTR_LOGGER_NAME]);
         memcpy(Buffer, nla_data(tb_vendor[NXP_ATTR_LOGGER_NAME]) ,bufferSize);
         return NL_OK;
     }
