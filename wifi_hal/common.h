@@ -54,7 +54,7 @@
 #include <stdarg.h>
 #include "pkt_stats.h"
 
-#define WIFI_HAL_VERSION      "009.011"
+#define WIFI_HAL_VERSION      "009.012"
 
 // some common macros
 #define min(x, y)       ((x) < (y) ? (x) : (y))
@@ -251,6 +251,43 @@ typedef struct _tlvbuf_wacp_mode_
     /** WACP mode*/
     u8 wacp_mode;
 } __attribute__ ((packed)) tlvbuf_wacp_mode;
+
+/* hostcmd support for edmac */
+#define EDMAC_CONFIG "/data/vendor/wifi/config/ed_mac_ctrl_V2_909x.conf"
+#define EDMAC_CMDNAME "ed_mac_ctrl_v2"
+
+/** HostCmd_DS_GEN */
+typedef struct _HostCmd_DS_GEN
+{
+    /** Command */
+    u16 command;
+    /** Size */
+    u16 size;
+    /** Sequence number */
+    u16 seq_num;
+    /** Result */
+    u16 result;
+} __attribute__ ((packed)) HostCmd_DS_GEN;
+
+/** Size of HostCmd_DS_GEN */
+#define S_DS_GEN    sizeof(HostCmd_DS_GEN)
+
+/** EDMAC control parameters */
+#define HostCmd_CMD_ED_CTRL 0x0130
+typedef struct _ed_mac_ctrl {
+    /** EU adaptivity for 2.4ghz band */
+    u16 ed_ctrl_2g;
+    /** Energy detect threshold offset for 2.4ghz */
+    int16_t ed_offset_2g;
+    /** EU adaptivity for 5ghz band */
+    u16 ed_ctrl_5g;
+    /** Energy detect threshold offset for 5ghz */
+    int16_t ed_offset_5g;
+    /* 6GHz band is not supported currently. If support is required, add changes here */
+} ed_mac_ctrl;
+
+/** Command RET code, MSB is set to 1 */
+#define HostCmd_RET_BIT 0x8000
 
 ///////////////////////////////////////////
 #endif //NXP_VHAL_PRIV_CMD
@@ -474,6 +511,8 @@ void hexdump(void *bytes, byte len);
 
 #if defined(NXP_VHAL_PRIV_CMD)
 int prepare_buffer(u8 *buffer, char* cmd, u32 num, char *args[]);
+int prepare_host_cmd_buffer(FILE* fp, char *cmd_name, u8 *buf);
+int process_host_cmd_resp(char *cmd_name, u8 *buf);
 #endif //NXP_VHAL_PRIV_CMD
 #endif
 

@@ -256,6 +256,7 @@ wifi_error init_wifi_vendor_hal_func_table(wifi_hal_fn *fn)
     fn->wifi_get_ch_load = wifi_get_ch_load;
     fn->wifi_set_wacp_mode = wifi_set_wacp_mode;
     fn->wifi_get_wacp_mode = wifi_get_wacp_mode;
+    fn->wifi_set_edmac_enabled = wifi_set_edmac_enabled;
 #endif
     fn->wifi_clear_link_stats = wifi_clear_link_stats;
     fn->wifi_get_valid_channels = wifi_get_valid_channels;
@@ -2296,6 +2297,110 @@ done:
 
 }
 
+/**
+ * @brief nable/Disable edmac
+ *
+ * @param enable     0 - disable, 1 - enable
+ * @return           WIFI_SUCCESS or WIFI_ERROR_UNKNOWN
+ */
+wifi_error wifi_set_edmac_enabled(wifi_interface_handle handle, uint8_t enable)
+{
+    char *iface;
+    FILE *fd;
+    int sockfd;
+    u8 *buffer = NULL;
+    HostCmd_DS_GEN *hostcmd;
+    u8 *hostcmd_data;
+    mrvl_priv_cmd *cmd = NULL;
+    struct ifreq ifr;
+    wifi_error ret = WIFI_SUCCESS;
+
+    iface = ((interface_info *)handle)->name;
+    ALOGI("%s: set edmac state for iface: %s to : %s", __FUNCTION__, iface, enable? "enable": "disable");
+
+    /* Open socket */
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        ALOGE("%s: Failed to open socket", __FUNCTION__);
+        return WIFI_ERROR_UNKNOWN;
+    }
+
+    fd = fopen(EDMAC_CONFIG, "r");
+    if (fd == NULL) {
+        ALOGE("%s: Failed to open config file: %s", __FUNCTION__, EDMAC_CONFIG);
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+
+    /* Initialize the command buffer */
+    buffer = (u8 *) malloc(BUFFER_LENGTH);
+    if (!buffer) {
+        ALOGE("%s: Failed to allocate buffer for command", __FUNCTION__);
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+    memset(buffer, 0, BUFFER_LENGTH);
+
+    /* Prepare hostcmd buffer */
+    prepare_buffer(buffer, (char *)PRIV_CMD_HOSTCMD, 0, NULL);
+
+    if (WIFI_SUCCESS != prepare_host_cmd_buffer(fd, (char *)EDMAC_CMDNAME,
+				buffer + strlen(CMD_NXP) + strlen(PRIV_CMD_HOSTCMD))) {
+        ALOGE("%s: Failed to prepare host_cmd  buffer", __FUNCTION__);
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+
+    hostcmd = (HostCmd_DS_GEN*)(buffer + strlen(CMD_NXP) + strlen(PRIV_CMD_HOSTCMD) + sizeof(u32));
+    hostcmd_data = (u8 *)hostcmd + S_DS_GEN;
+
+    //update enable/disable param:
+    if (enable) {
+        hostcmd_data[0] = 1;
+        hostcmd_data[4] = 1;
+    } else {
+        hostcmd_data[0] = 0;
+        hostcmd_data[4] = 0;
+    }
+
+    ALOGV("%s: hostcmd_data: ", __FUNCTION__);
+    hexdump((void *)hostcmd_data, (hostcmd->size - S_DS_GEN));
+
+    cmd = (mrvl_priv_cmd *) malloc(sizeof(mrvl_priv_cmd));
+    if (!cmd) {
+        ALOGE("%s: Failed to allocate memory for mrvl_priv_cmd", __FUNCTION__);
+        ret = WIFI_ERROR_UNKNOWN;
+	goto done;
+    }
+
+    cmd->buf = buffer;
+    cmd->used_len = 0;
+    cmd->total_len = BUFFER_LENGTH;
+
+    /* Perform ioctl */
+    memset(&ifr, 0, sizeof(ifr));
+    strncpy(ifr.ifr_ifrn.ifrn_name, iface, IFNAMSIZ -1);
+    ifr.ifr_ifru.ifru_data = (void *) cmd;
+
+    if (ioctl(sockfd, MLAN_ETH_PRIV, &ifr)) {
+        ALOGE("%s: ioctl failed for interface: %s", __FUNCTION__, iface);
+        ret = WIFI_ERROR_UNKNOWN;
+        goto done;
+    }
+
+    /* Process result */
+    process_host_cmd_resp((char *)PRIV_CMD_HOSTCMD, buffer);
+
+done:
+    close(sockfd);
+    if (fd)
+        fclose(fd);
+    if (buffer)
+        free(buffer);
+    if (cmd)
+        free(cmd);
+
+    return ret;
+}
 #endif //NXP_VHAL_PRIV_CMD
 
 /////////////////////////////////////////////////////////////////////////////

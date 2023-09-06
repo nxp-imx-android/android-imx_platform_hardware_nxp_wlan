@@ -1,8 +1,17 @@
-This vendor hal is compatible with wlan HIDL 1.2/1.3/1.4.
-HAL code can support Android Q,R.
+This vendor hal is compatible with wlan HIDL 1.2/1.3/1.4/1.5.
+HAL code can support Android Q,R,S.
 
 
 ChangeLog
+
+2023-July-13 - v009.012
+  *Support for edmac enable/disable command
+    - Add VHAL support to enable/disable edmac.
+      Same as getchload, the feature is disabled by default to
+      avoid the compilation error with the products that does not
+      support this feature.
+      Same can be enabled by using NXP_VHAL_PRIV_CMD flag in
+      device specific path.
 
 2023-Mar-3 - v009.010
 
