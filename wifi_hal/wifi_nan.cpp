@@ -36,7 +36,6 @@
 
 #include <utils/Log.h>
 
-#include <hardware_legacy/wifi_hal.h>
 #include "common.h"
 #include "cpp_bindings.h"
 #include "nan_nxp.h"

@@ -34,7 +34,6 @@
 
 #include <ctype.h>
 
-#include <hardware_legacy/wifi_hal.h>
 #include "common.h"
 #include "cpp_bindings.h"
 
@@ -492,8 +491,11 @@ const char *attributeToString(int attribute)
 }
 
 void WifiEvent::log() {
-    parse();
-
+    int res = parse();
+    if (res < 0) {
+        ALOGE("Failed to parse = %d", res);
+        return;
+    }
     byte *data = (byte *)genlmsg_attrdata(mHeader, 0);
     int len = genlmsg_attrlen(mHeader, 0);
     ALOGV("cmd = %s, len = %d", get_cmdString(), len);

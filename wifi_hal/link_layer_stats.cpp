@@ -36,7 +36,6 @@
 
 #include <utils/Log.h>
 
-#include <hardware_legacy/wifi_hal.h>
 #include "common.h"
 #include "cpp_bindings.h"
 
@@ -189,7 +188,6 @@ public:
 		iface_stat->rssi_ack = iface_stat_nxp->rssi_ack;
 		memcpy((u8 *)iface_stat->ac, iface_stat_nxp->ac,sizeof(wifi_wmm_ac_stat)*WIFI_AC_MAX);
 		iface_stat->num_peers = iface_stat_nxp->num_peers;
-
 		memcpy(&iface_stat->peer_info, &iface_stat_nxp->peer_info, iface_len - sizeof(wifi_iface_stat_nxp));
         /** Process Num of RADIO */
         if(!tb_vendor[NXP_ATTR_LL_STATS_NUM_RADIOS]){
@@ -234,8 +232,10 @@ public:
             radio_stat_tmp->radio = radio_stat_nxp_tmp->radio;
             radio_stat_tmp->on_time = radio_stat_nxp_tmp->on_time;
             radio_stat_tmp->tx_time = radio_stat_nxp_tmp->tx_time;
+#if !defined(ANDROID_6)
             radio_stat_tmp->num_tx_levels = radio_stat_nxp_tmp->num_tx_levels;
             radio_stat_tmp->tx_time_per_levels = NULL;
+#endif
             radio_stat_tmp->rx_time = radio_stat_nxp_tmp->rx_time;
             radio_stat_tmp->on_time_scan = radio_stat_nxp_tmp->on_time_scan;
             radio_stat_tmp->on_time_nbd = radio_stat_nxp_tmp->on_time_nbd;
@@ -244,9 +244,12 @@ public:
             radio_stat_tmp->on_time_pno_scan = radio_stat_nxp_tmp->on_time_pno_scan;
             radio_stat_tmp->on_time_hs20 = radio_stat_nxp_tmp->on_time_hs20;
             radio_stat_tmp->num_channels = radio_stat_nxp_tmp->num_channels;
+//copy the channel stats for Android version greater than Android-9
+#if !defined(ANDROID_6) && !defined(ANDROID_7) && !defined(ANDROID_8) && !defined(ANDROID_9)
             memcpy(radio_stat_tmp->channels, radio_stat_nxp_tmp->channels, radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
             radio_stat_tmp = (wifi_radio_stat *)((u8 *)radio_stat_tmp + sizeof(wifi_radio_stat) + radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
             radio_stat_nxp_tmp = (wifi_radio_stat_nxp *)((u8 *)radio_stat_nxp_tmp +sizeof(wifi_radio_stat_nxp) + radio_stat_nxp_tmp->num_channels * sizeof(wifi_channel_stat));
+#endif
         }
 
 

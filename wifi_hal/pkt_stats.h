@@ -15,7 +15,6 @@
 * limitations under the License.
 */
 
-#include <hardware_legacy/wifi_hal.h>
 #include "common.h"
 
 #ifndef _PKT_STATS_H_
